@@ -32,19 +32,21 @@ type CPNDefinitionJSON struct {
 
 // PlaceJSON represents the JSON structure for places
 type PlaceJSON struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	ColorSet string `json:"colorSet"` // Name of the color set
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	ColorSet string    `json:"colorSet"` // Name of the color set
+	Position *Position `json:"position,omitempty"`
 }
 
 // TransitionJSON represents the JSON structure for transitions
 type TransitionJSON struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	GuardExpression string   `json:"guardExpression,omitempty"`
-	Variables       []string `json:"variables,omitempty"`
-	TransitionDelay int      `json:"transitionDelay,omitempty"`
-	Kind            string   `json:"kind,omitempty"` // "Auto" or "Manual"
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	GuardExpression string    `json:"guardExpression,omitempty"`
+	Variables       []string  `json:"variables,omitempty"`
+	TransitionDelay int       `json:"transitionDelay,omitempty"`
+	Kind            string    `json:"kind,omitempty"` // "Auto" or "Manual"
+	Position        *Position `json:"position,omitempty"`
 }
 
 // ArcJSON represents the JSON structure for arcs
@@ -134,6 +136,9 @@ func (p *CPNParser) parsePlaces(cpn *CPN, placeDefs []PlaceJSON) error {
 
 		// Create the place
 		place := NewPlace(placeDef.ID, placeDef.Name, colorSet)
+		if placeDef.Position != nil {
+			place.Position = &Position{X: placeDef.Position.X, Y: placeDef.Position.Y}
+		}
 		cpn.AddPlace(place)
 	}
 	return nil
@@ -165,6 +170,10 @@ func (p *CPNParser) parseTransitions(cpn *CPN, transitionDefs []TransitionJSON) 
 			default:
 				return fmt.Errorf("unknown transition kind '%s' for transition '%s'", transitionDef.Kind, transitionDef.Name)
 			}
+		}
+
+		if transitionDef.Position != nil {
+			transition.Position = &Position{X: transitionDef.Position.X, Y: transitionDef.Position.Y}
 		}
 
 		cpn.AddTransition(transition)
@@ -239,6 +248,7 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 			ID:       place.ID,
 			Name:     place.Name,
 			ColorSet: place.ColorSet.Name(),
+			Position: place.Position,
 		}
 	}
 
@@ -251,6 +261,7 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 			Variables:       transition.Variables,
 			TransitionDelay: transition.TransitionDelay,
 			Kind:            string(transition.Kind),
+			Position:        transition.Position,
 		}
 	}
 

@@ -18,6 +18,7 @@ type Transition struct {
 	Variables       []string       `json:"variables"`       // Variables used in guard/arc expressions
 	TransitionDelay int            `json:"transitionDelay"` // Delay in time units
 	Kind            TransitionKind `json:"kind"`            // Auto or Manual
+	Position        *Position      `json:"position,omitempty"`
 }
 
 // NewTransition creates a new transition with the given parameters
@@ -29,6 +30,7 @@ func NewTransition(id, name string) *Transition {
 		Variables:       []string{},
 		TransitionDelay: 0,
 		Kind:            TransitionKindAuto,
+		Position:        nil,
 	}
 }
 
