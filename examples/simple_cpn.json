@@ -1,0 +1,81 @@
+{
+  "id": "simple-example",
+  "name": "Simple Example CPN",
+  "description": "A simple example CPN demonstrating basic functionality",
+  "colorSets": [
+    "colset INT = int;",
+    "colset STRING = string;"
+  ],
+  "places": [
+    {
+      "id": "p1",
+      "name": "Start",
+      "colorSet": "INT"
+    },
+    {
+      "id": "p2", 
+      "name": "Processing",
+      "colorSet": "INT"
+    },
+    {
+      "id": "p3",
+      "name": "End",
+      "colorSet": "INT"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "t1",
+      "name": "Begin Processing",
+      "kind": "Auto"
+    },
+    {
+      "id": "t2",
+      "name": "Complete Processing",
+      "guardExpression": "x > 5",
+      "variables": ["x"],
+      "kind": "Auto",
+      "transitionDelay": 2
+    }
+  ],
+  "arcs": [
+    {
+      "id": "a1",
+      "sourceId": "p1",
+      "targetId": "t1",
+      "expression": "x",
+      "direction": "IN"
+    },
+    {
+      "id": "a2",
+      "sourceId": "t1",
+      "targetId": "p2",
+      "expression": "x * 2",
+      "direction": "OUT"
+    },
+    {
+      "id": "a3",
+      "sourceId": "p2",
+      "targetId": "t2",
+      "expression": "x",
+      "direction": "IN"
+    },
+    {
+      "id": "a4",
+      "sourceId": "t2",
+      "targetId": "p3",
+      "expression": "x + 1",
+      "direction": "OUT"
+    }
+  ],
+  "initialMarking": {
+    "Start": [
+      {
+        "value": 3,
+        "timestamp": 0
+      }
+    ]
+  },
+  "endPlaces": ["End"]
+}
+

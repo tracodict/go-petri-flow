@@ -1,0 +1,108 @@
+{
+  "id": "manual-example",
+  "name": "Manual Transition Example",
+  "description": "Example CPN with manual transitions for user interaction",
+  "colorSets": [
+    "colset INT = int;",
+    "colset Status = with pending | approved | rejected;"
+  ],
+  "places": [
+    {
+      "id": "p1",
+      "name": "Requests",
+      "colorSet": "INT"
+    },
+    {
+      "id": "p2",
+      "name": "Review",
+      "colorSet": "INT"
+    },
+    {
+      "id": "p3",
+      "name": "Approved",
+      "colorSet": "INT"
+    },
+    {
+      "id": "p4",
+      "name": "Rejected",
+      "colorSet": "INT"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "t1",
+      "name": "Submit for Review",
+      "kind": "Auto"
+    },
+    {
+      "id": "t2",
+      "name": "Approve Request",
+      "kind": "Manual",
+      "guardExpression": "x >= 100",
+      "variables": ["x"]
+    },
+    {
+      "id": "t3",
+      "name": "Reject Request",
+      "kind": "Manual"
+    }
+  ],
+  "arcs": [
+    {
+      "id": "a1",
+      "sourceId": "p1",
+      "targetId": "t1",
+      "expression": "x",
+      "direction": "IN"
+    },
+    {
+      "id": "a2",
+      "sourceId": "t1",
+      "targetId": "p2",
+      "expression": "x",
+      "direction": "OUT"
+    },
+    {
+      "id": "a3",
+      "sourceId": "p2",
+      "targetId": "t2",
+      "expression": "x",
+      "direction": "IN"
+    },
+    {
+      "id": "a4",
+      "sourceId": "t2",
+      "targetId": "p3",
+      "expression": "x",
+      "direction": "OUT"
+    },
+    {
+      "id": "a5",
+      "sourceId": "p2",
+      "targetId": "t3",
+      "expression": "x",
+      "direction": "IN"
+    },
+    {
+      "id": "a6",
+      "sourceId": "t3",
+      "targetId": "p4",
+      "expression": "x",
+      "direction": "OUT"
+    }
+  ],
+  "initialMarking": {
+    "Requests": [
+      {
+        "value": 150,
+        "timestamp": 0
+      },
+      {
+        "value": 50,
+        "timestamp": 0
+      }
+    ]
+  },
+  "endPlaces": ["Approved", "Rejected"]
+}
+

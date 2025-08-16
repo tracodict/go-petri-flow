@@ -1,0 +1,51 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.cov
+
+# Dependency directories (remove the comment below if you use Go modules)
+# vendor/
+
+# Go workspace file
+*.code-workspace
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+
+# Logs
+*.log
+
+# Test cache
+*.testcache
+
+# Build artifacts
+*.a
+
+# GoLand project files
+*.iml
+
+# Go module files backup
+go.sum
+
+# Local config
+.env
+.env.*
+
+# Misc
+*.tmp
+*.bak
+
+# Ignore example output
+examples/*.out

@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Colored Petri Net (CPN) Network Definition",
+  "type": "object",
+  "required": ["id", "name", "description", "places", "transitions", "arcs"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "colorSets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Color set definitions as strings (e.g., 'colset INT = int;')"
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "colorSet"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "colorSet": { "type": "string" }
+        }
+      }
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "kind": { "type": "string", "enum": ["Auto", "Manual", "Dmn", "Llm", "Message"] },
+          "guardExpression": { "type": "string" },
+          "variables": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "transitionDelay": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "arcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceId", "targetId", "expression", "direction"],
+        "properties": {
+          "id": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "targetId": { "type": "string" },
+          "expression": { "type": "string" },
+          "direction": { "type": "string", "enum": ["IN", "OUT"] }
+        }
+      }
+    },
+    "initialMarking": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["value", "timestamp"],
+          "properties": {
+            "value": {},
+            "timestamp": { "type": "integer" }
+          }
+        }
+      },
+      "description": "Initial tokens by place name"
+    },
+    "endPlaces": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Places that signify case completion"
+    }
+  },
+  "additionalProperties": false
+}
