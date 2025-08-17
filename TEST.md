@@ -72,6 +72,11 @@ curl -X POST {$FLOW_SVC}/api/transitions/fire \
 curl -X POST "{$FLOW_SVC}/api/simulation/step?id=test-cpn"
 ```
 
+## 8. Validate a CPN (rule violations & diagnostics)
+```sh
+curl -X GET "${FLOW_SVC}/api/cpn/validate?id=test-cpn"
+```
+
 # Notes
 - Replace `localhost:8080` with your actual server address/port if different.
 - The example payloads match those used in the Go test cases.

@@ -1,0 +1,5 @@
+    runtime: go125 # or your desired Go version
+    instance_class: F1 # Provides 28 instance hours/day within free tier
+    main: ./cmd/server
+    automatic_scaling:
+      max_instances: 1 # Prevents spinning up multiple instances

@@ -17,6 +17,7 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/cpn/get", s.corsMiddleware(s.GetCPN))
 	mux.HandleFunc("/api/cpn/delete", s.corsMiddleware(s.DeleteCPN))
 	mux.HandleFunc("/api/cpn/reset", s.corsMiddleware(s.ResetCPN))
+	mux.HandleFunc("/api/cpn/validate", s.corsMiddleware(s.ValidateCPN))
 
 	// Marking
 	mux.HandleFunc("/api/marking/get", s.corsMiddleware(s.GetMarking))
@@ -130,6 +131,7 @@ func (s *Server) APIDocs(w http.ResponseWriter, r *http.Request) {
 				"GET /api/cpn/get":       "Get CPN details by ID",
 				"DELETE /api/cpn/delete": "Delete a CPN by ID",
 				"POST /api/cpn/reset":    "Reset CPN to initial marking",
+				"GET /api/cpn/validate":  "Validate a CPN and return rule violations and transition diagnostics",
 			},
 			"Marking": map[string]interface{}{
 				"GET /api/marking/get": "Get current marking of a CPN",
