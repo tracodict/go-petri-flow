@@ -2,20 +2,25 @@ package models
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // ColorSetParser handles parsing of color set definitions from strings
 type ColorSetParser struct {
-	colorSets map[string]ColorSet // Registry of defined color sets
+	colorSets   map[string]ColorSet           // Registry of defined color sets
+	jsonSchemas map[string]*jsonschema.Schema // Compiled JSON Schemas
 }
 
 // NewColorSetParser creates a new color set parser
 func NewColorSetParser() *ColorSetParser {
 	parser := &ColorSetParser{
-		colorSets: make(map[string]ColorSet),
+		colorSets:   make(map[string]ColorSet),
+		jsonSchemas: make(map[string]*jsonschema.Schema),
 	}
 
 	// Register built-in color sets
@@ -100,7 +105,18 @@ func (p *ColorSetParser) parseTypeDefinition(name, typeDefinition string, timed 
 	case typeDefinition == "unit":
 		return NewUnitColorSet(name, timed), nil
 	case typeDefinition == "map":
-		return NewJsonMapColorSet(name, timed), nil
+		// deprecated alias -> json (untyped)
+		log.Printf("[DEPRECATION] color set type 'map' is deprecated; use 'json' instead")
+		return NewJsonColorSet(name, timed, "", nil), nil
+	case typeDefinition == "json":
+		return NewJsonColorSet(name, timed, "", nil), nil
+	case strings.HasPrefix(typeDefinition, "json<") && strings.HasSuffix(typeDefinition, ">"):
+		schemaName := strings.TrimSuffix(strings.TrimPrefix(typeDefinition, "json<"), ">")
+		schema, ok := p.jsonSchemas[schemaName]
+		if !ok {
+			return nil, fmt.Errorf("unknown json schema '%s'", schemaName)
+		}
+		return NewJsonColorSet(name, timed, schemaName, schema), nil
 	case strings.HasPrefix(typeDefinition, "int[") && strings.HasSuffix(typeDefinition, "]"):
 		return p.parseIntegerRange(name, typeDefinition, timed)
 	case strings.HasPrefix(typeDefinition, "with "):

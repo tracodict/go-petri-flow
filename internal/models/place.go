@@ -27,8 +27,13 @@ func (p *Place) ValidateToken(token *Token) error {
 	}
 
 	if !p.ColorSet.IsMember(token.Value) {
-		return fmt.Errorf("token value %v is not a member of color set %s for place %s",
-			token.Value, p.ColorSet.Name(), p.Name)
+		// Provide detailed schema error if available
+		if jc, ok := p.ColorSet.(*JsonColorSet); ok {
+			if err := jc.Validate(token.Value); err != nil {
+				return fmt.Errorf("token value invalid for json color set %s in place %s: %v", p.ColorSet.Name(), p.Name, err)
+			}
+		}
+		return fmt.Errorf("token value %v is not a member of color set %s for place %s", token.Value, p.ColorSet.Name(), p.Name)
 	}
 
 	return nil

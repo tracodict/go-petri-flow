@@ -1,6 +1,7 @@
 package api
 
 import (
+	"go-petri-flow/internal/models"
 	"net/http"
 	"strings"
 )
@@ -60,7 +61,7 @@ func (s *Server) ValidateCPN(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Initial marking referencing unknown places or bad tokens
+	// Initial marking referencing unknown places or bad tokens (including JSON schema violations)
 	for placeName, multi := range cpn.InitialMarking {
 		place := cpn.GetPlaceByName(placeName)
 		if place == nil {
@@ -69,7 +70,16 @@ func (s *Server) ValidateCPN(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, tok := range multi {
 			if place.ColorSet != nil && !place.ColorSet.IsMember(tok.Value) {
-				violations = append(violations, ValidationViolation{Code: "token_color_mismatch", Message: "Token value not member of place color set", Context: map[string]interface{}{"placeName": placeName, "value": tok.Value, "colorSet": place.ColorSet.Name()}})
+				code := "token_color_mismatch"
+				// Provide more specific code & detail for json schema mismatch
+				if jc, ok := place.ColorSet.(*models.JsonColorSet); ok {
+					if err := jc.Validate(tok.Value); err != nil {
+						code = "token_schema_violation"
+						violations = append(violations, ValidationViolation{Code: code, Message: err.Error(), Context: map[string]interface{}{"placeName": placeName, "colorSet": place.ColorSet.Name()}})
+						continue
+					}
+				}
+				violations = append(violations, ValidationViolation{Code: code, Message: "Token value not member of place color set", Context: map[string]interface{}{"placeName": placeName, "value": tok.Value, "colorSet": place.ColorSet.Name()}})
 			}
 		}
 	}
@@ -117,4 +127,21 @@ func (s *Server) ValidateCPN(w http.ResponseWriter, r *http.Request) {
 		"transitions": diagnostics,
 	}
 	s.writeSuccess(w, result, "Validation completed")
+}
+
+// Helpers
+func isJSONLike(v interface{}) bool {
+	switch v.(type) {
+	case map[string]interface{}, []interface{}:
+		return true
+	}
+	return false
+}
+
+func isJsonColorSet(cs interface{}) bool {
+	if named, ok := cs.(interface{ String() string }); ok {
+		s := named.String()
+		return strings.Contains(s, "= json") || strings.Contains(s, "= json<") || strings.Contains(s, "= map")
+	}
+	return false
 }

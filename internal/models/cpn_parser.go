@@ -1,8 +1,11 @@
 package models
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // CPNParser handles parsing of CPN definitions from JSON format
@@ -22,12 +25,48 @@ type CPNDefinitionJSON struct {
 	ID             string                 `json:"id"`
 	Name           string                 `json:"name"`
 	Description    string                 `json:"description"`
-	ColorSets      []string               `json:"colorSets,omitempty"` // Color set definitions
+	ColorSets      []string               `json:"colorSets,omitempty"`   // Color set definitions
+	JsonSchemas    []JsonSchemaDef        `json:"jsonSchemas,omitempty"` // Optional JSON Schemas
 	Places         []PlaceJSON            `json:"places"`
 	Transitions    []TransitionJSON       `json:"transitions"`
 	Arcs           []ArcJSON              `json:"arcs"`
 	InitialMarking map[string][]TokenJSON `json:"initialMarking,omitempty"`
 	EndPlaces      []string               `json:"endPlaces,omitempty"`
+}
+
+// JsonSchemaDef represents a named JSON Schema definition
+type JsonSchemaDef struct {
+	Name   string      `json:"name"`
+	Schema interface{} `json:"schema"`
+}
+
+// parseJsonSchemas compiles and registers JSON Schemas for later json<SchemaName> color set references
+func (p *CPNParser) parseJsonSchemas(defs []JsonSchemaDef) error {
+	if len(defs) == 0 {
+		return nil
+	}
+	compiler := jsonschema.NewCompiler()
+	for _, d := range defs {
+		if d.Name == "" || d.Schema == nil {
+			return fmt.Errorf("invalid json schema definition (missing name or schema)")
+		}
+		// Marshal schema object back to JSON bytes for compiler
+		data, err := json.Marshal(d.Schema)
+		if err != nil {
+			return fmt.Errorf("failed to marshal schema %s: %v", d.Name, err)
+		}
+		// Use synthetic URL id
+		url := "mem://schemas/" + d.Name + ".json"
+		if err := compiler.AddResource(url, bytes.NewReader(data)); err != nil {
+			return fmt.Errorf("failed to add schema resource %s: %v", d.Name, err)
+		}
+		compiled, err := compiler.Compile(url)
+		if err != nil {
+			return fmt.Errorf("failed to compile schema %s: %v", d.Name, err)
+		}
+		p.colorSetParser.jsonSchemas[d.Name] = compiled
+	}
+	return nil
 }
 
 // PlaceJSON represents the JSON structure for places
@@ -78,6 +117,11 @@ func (p *CPNParser) ParseCPNFromJSON(jsonData []byte) (*CPN, error) {
 func (p *CPNParser) ParseCPNFromDefinition(cpnDef *CPNDefinitionJSON) (*CPN, error) {
 	// Create the CPN
 	cpn := NewCPN(cpnDef.ID, cpnDef.Name, cpnDef.Description)
+
+	// Load JSON Schemas first so color sets can reference them
+	if err := p.parseJsonSchemas(cpnDef.JsonSchemas); err != nil {
+		return nil, fmt.Errorf("failed to parse json schemas: %v", err)
+	}
 
 	// Parse color sets first
 	if err := p.parseColorSets(cpnDef.ColorSets); err != nil {
