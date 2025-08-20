@@ -90,17 +90,19 @@ type TransitionJSON struct {
 
 // ArcJSON represents the JSON structure for arcs
 type ArcJSON struct {
-	ID         string `json:"id"`
-	SourceID   string `json:"sourceId"`
-	TargetID   string `json:"targetId"`
-	Expression string `json:"expression"`
-	Direction  string `json:"direction"` // "IN" or "OUT"
+	ID           string `json:"id"`
+	SourceID     string `json:"sourceId"`
+	TargetID     string `json:"targetId"`
+	Expression   string `json:"expression"`
+	Direction    string `json:"direction"` // "IN" or "OUT"
+	Multiplicity int    `json:"multiplicity,omitempty"`
 }
 
 // TokenJSON represents the JSON structure for tokens
 type TokenJSON struct {
 	Value     interface{} `json:"value"`
 	Timestamp int         `json:"timestamp"`
+	Count     int         `json:"count,omitempty"` // Optional multiplicity shorthand (>=1)
 }
 
 // ParseCPNFromJSON parses a CPN definition from JSON
@@ -241,6 +243,9 @@ func (p *CPNParser) parseArcs(cpn *CPN, arcDefs []ArcJSON) error {
 
 		// Create the arc
 		arc := NewArc(arcDef.ID, arcDef.SourceID, arcDef.TargetID, arcDef.Expression, direction)
+		if arcDef.Multiplicity > 0 {
+			arc.Multiplicity = arcDef.Multiplicity
+		}
 		cpn.AddArc(arc)
 	}
 	return nil
@@ -255,17 +260,22 @@ func (p *CPNParser) parseInitialMarking(cpn *CPN, initialMarkingDef map[string][
 			return fmt.Errorf("unknown place '%s' in initial marking", placeName)
 		}
 
-		// Parse tokens
+		// Parse tokens (expanding Count shorthand)
 		var tokens []*Token
 		for _, tokenDef := range tokenDefs {
-			// Validate token value against place's color set
+			count := tokenDef.Count
+			if count <= 0 { // default to 1 when omitted
+				count = 1
+			}
+			// Validate once
 			if !place.ColorSet.IsMember(tokenDef.Value) {
 				return fmt.Errorf("token value %v is not valid for color set %s in place %s",
 					tokenDef.Value, place.ColorSet.Name(), placeName)
 			}
-
-			token := NewToken(tokenDef.Value, tokenDef.Timestamp)
-			tokens = append(tokens, token)
+			for i := 0; i < count; i++ {
+				token := NewToken(tokenDef.Value, tokenDef.Timestamp)
+				tokens = append(tokens, token)
+			}
 		}
 
 		cpn.SetInitialMarking(placeName, tokens)

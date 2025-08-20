@@ -131,4 +131,15 @@ curl -X GET "${FLOW_SVC}/api/marking/get?id=steps-cpn-2"
 - Reset returns to initial multiset of tokens enabling reproducible runs.
 
 ---
-Document version: 1.0
+
+
+### Invidual token in multiset
+
+Arc multiplicity today just loops the same arc logic N times; it doesn’t bind “individual slot” variables for those N consumed tokens. So you cannot distinguish them inside a single firing via something like x1, x2, x3 automatically.
+
+Current options:
+
+1. If you need to refer to each token separately, use multiple parallel input arcs (each with its own variable name: x1, x2, x3) instead of one arc with multiplicity=3. That gives you distinct bindings you can use in guard/output expressions.
+2. If tokens are indistinguishable (all the same value) and you only need the count, multiplicity is fine—just consume them; you don’t get per‑token variables.
+3. If you need to process a batch collectively, first aggregate tokens into a product/tuple or JSON array token via repeated firings of a “collector” transition, then operate on that single structured token.
+4. For future enhancement you could add (not implemented): automatic variables like x_1…x_n or an iteration index (e.g. _i) during multiplicity expansion.

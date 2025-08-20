@@ -88,8 +88,14 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 	// Process input arcs (consume tokens)
 	inputArcs := cpn.GetInputArcs(transition.ID)
 	for _, arc := range inputArcs {
-		if err := e.processInputArc(cpn, arc, context, marking); err != nil {
-			return fmt.Errorf("failed to process input arc %s: %v", arc.ID, err)
+		count := arc.Multiplicity
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count; i++ {
+			if err := e.processInputArc(cpn, arc, context, marking); err != nil {
+				return fmt.Errorf("failed to process input arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+			}
 		}
 	}
 
@@ -101,8 +107,14 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 	// Process output arcs (produce tokens)
 	outputArcs := cpn.GetOutputArcs(transition.ID)
 	for _, arc := range outputArcs {
-		if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
-			return fmt.Errorf("failed to process output arc %s: %v", arc.ID, err)
+		count := arc.Multiplicity
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count; i++ {
+			if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
+				return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+			}
 		}
 	}
 
