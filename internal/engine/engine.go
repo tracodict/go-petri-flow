@@ -104,6 +104,13 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 		marking.AdvanceGlobalClock(marking.GlobalClock + transition.TransitionDelay)
 	}
 
+	// Execute transition action (side-effect expression) if present
+	if transition.HasAction() {
+		if _, err := e.evaluator.EvaluateArcExpression(transition.ActionExpression, context); err != nil {
+			return fmt.Errorf("failed to execute action for transition %s: %v", transition.Name, err)
+		}
+	}
+
 	// Process output arcs (produce tokens)
 	outputArcs := cpn.GetOutputArcs(transition.ID)
 	for _, arc := range outputArcs {

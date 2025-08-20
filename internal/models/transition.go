@@ -12,37 +12,40 @@ const (
 
 // Transition represents a transition in the CPN
 type Transition struct {
-	ID              string         `json:"id"`
-	Name            string         `json:"name"`
-	GuardExpression string         `json:"guardExpression"` // Lua expression
-	Variables       []string       `json:"variables"`       // Variables used in guard/arc expressions
-	TransitionDelay int            `json:"transitionDelay"` // Delay in time units
-	Kind            TransitionKind `json:"kind"`            // Auto or Manual
-	Position        *Position      `json:"position,omitempty"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	GuardExpression  string         `json:"guardExpression"` // Lua expression
+	Variables        []string       `json:"variables"`       // Variables used in guard/arc expressions
+	TransitionDelay  int            `json:"transitionDelay"` // Delay in time units
+	Kind             TransitionKind `json:"kind"`            // Auto or Manual
+	Position         *Position      `json:"position,omitempty"`
+	ActionExpression string         `json:"actionExpression,omitempty"` // Optional Lua action executed when firing (after inputs consumed, before outputs)
 }
 
 // NewTransition creates a new transition with the given parameters
 func NewTransition(id, name string) *Transition {
 	return &Transition{
-		ID:              id,
-		Name:            name,
-		GuardExpression: "",
-		Variables:       []string{},
-		TransitionDelay: 0,
-		Kind:            TransitionKindAuto,
-		Position:        nil,
+		ID:               id,
+		Name:             name,
+		GuardExpression:  "",
+		Variables:        []string{},
+		TransitionDelay:  0,
+		Kind:             TransitionKindAuto,
+		Position:         nil,
+		ActionExpression: "",
 	}
 }
 
 // NewTransitionWithGuard creates a new transition with a guard expression
 func NewTransitionWithGuard(id, name, guardExpression string, variables []string) *Transition {
 	return &Transition{
-		ID:              id,
-		Name:            name,
-		GuardExpression: guardExpression,
-		Variables:       variables,
-		TransitionDelay: 0,
-		Kind:            TransitionKindAuto,
+		ID:               id,
+		Name:             name,
+		GuardExpression:  guardExpression,
+		Variables:        variables,
+		TransitionDelay:  0,
+		Kind:             TransitionKindAuto,
+		ActionExpression: "",
 	}
 }
 
@@ -62,6 +65,11 @@ func (t *Transition) SetKind(kind TransitionKind) {
 	t.Kind = kind
 }
 
+// SetAction sets the action expression for the transition
+func (t *Transition) SetAction(action string) {
+	t.ActionExpression = action
+}
+
 // IsAuto returns true if the transition is automatic
 func (t *Transition) IsAuto() bool {
 	return t.Kind == TransitionKindAuto
@@ -75,6 +83,11 @@ func (t *Transition) IsManual() bool {
 // HasGuard returns true if the transition has a guard expression
 func (t *Transition) HasGuard() bool {
 	return t.GuardExpression != ""
+}
+
+// HasAction returns true if transition has an action expression
+func (t *Transition) HasAction() bool {
+	return t.ActionExpression != ""
 }
 
 // String returns a string representation of the transition
@@ -93,11 +106,12 @@ func (t *Transition) Clone() *Transition {
 	copy(variables, t.Variables)
 
 	return &Transition{
-		ID:              t.ID,
-		Name:            t.Name,
-		GuardExpression: t.GuardExpression,
-		Variables:       variables,
-		TransitionDelay: t.TransitionDelay,
-		Kind:            t.Kind,
+		ID:               t.ID,
+		Name:             t.Name,
+		GuardExpression:  t.GuardExpression,
+		Variables:        variables,
+		TransitionDelay:  t.TransitionDelay,
+		Kind:             t.Kind,
+		ActionExpression: t.ActionExpression,
 	}
 }

@@ -79,13 +79,14 @@ type PlaceJSON struct {
 
 // TransitionJSON represents the JSON structure for transitions
 type TransitionJSON struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	GuardExpression string    `json:"guardExpression,omitempty"`
-	Variables       []string  `json:"variables,omitempty"`
-	TransitionDelay int       `json:"transitionDelay,omitempty"`
-	Kind            string    `json:"kind,omitempty"` // "Auto" or "Manual"
-	Position        *Position `json:"position,omitempty"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	GuardExpression  string    `json:"guardExpression,omitempty"`
+	Variables        []string  `json:"variables,omitempty"`
+	TransitionDelay  int       `json:"transitionDelay,omitempty"`
+	Kind             string    `json:"kind,omitempty"` // "Auto" or "Manual"
+	Position         *Position `json:"position,omitempty"`
+	ActionExpression string    `json:"actionExpression,omitempty"`
 }
 
 // ArcJSON represents the JSON structure for arcs
@@ -216,6 +217,11 @@ func (p *CPNParser) parseTransitions(cpn *CPN, transitionDefs []TransitionJSON) 
 			default:
 				return fmt.Errorf("unknown transition kind '%s' for transition '%s'", transitionDef.Kind, transitionDef.Name)
 			}
+		}
+
+		// Set action if provided
+		if transitionDef.ActionExpression != "" {
+			transition.SetAction(transitionDef.ActionExpression)
 		}
 
 		if transitionDef.Position != nil {
