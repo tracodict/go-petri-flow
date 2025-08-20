@@ -398,11 +398,32 @@ func (e *Engine) FireEnabledTransitions(cpn *models.CPN, marking *models.Marking
 
 // SimulateStep performs one simulation step (fire all enabled automatic transitions)
 func (e *Engine) SimulateStep(cpn *models.CPN, marking *models.Marking) (int, error) {
-	// Advance global clock if needed
+	// Advance global clock if needed (bring earliest future tokens into scope)
 	e.AdvanceGlobalClock(marking)
 
-	// Fire all enabled automatic transitions
-	return e.FireEnabledTransitions(cpn, marking)
+	fired := 0
+	// Capture snapshot of enabled automatic transitions at start of step (layer)
+	enabled, bindingsMap, err := e.GetEnabledTransitions(cpn, marking)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get enabled transitions: %v", err)
+	}
+	// Deterministic ordering
+	sort.Slice(enabled, func(i, j int) bool { return enabled[i].ID < enabled[j].ID })
+	for _, t := range enabled {
+		if !t.IsAuto() { // skip manual in step auto firing
+			continue
+		}
+		bindings := bindingsMap[t.ID]
+		if len(bindings) == 0 {
+			continue
+		}
+		// Fire only first binding for this transition in this layer
+		if err := e.FireTransition(cpn, t, bindings[0], marking); err != nil {
+			return fired, fmt.Errorf("failed to fire transition %s: %v", t.Name, err)
+		}
+		fired++
+	}
+	return fired, nil
 }
 
 // IsCompleted checks if the CPN execution is completed

@@ -364,28 +364,44 @@ func TestSimulationStep(t *testing.T) {
 	eng := engine.NewEngine()
 	defer eng.Close()
 	
-	// Perform simulation step
+	// Perform first simulation step (layer 1) - only first transition fires
 	firedCount, err := eng.SimulateStep(cpn, marking)
 	if err != nil {
-		t.Fatalf("Failed to simulate step: %v", err)
+					t.Fatalf("Failed to simulate first step: %v", err)
 	}
-	
-	// Should fire both transitions in sequence
-	if firedCount != 2 {
-		t.Errorf("Expected 2 transitions fired, got %d", firedCount)
+	if firedCount != 1 {
+					t.Errorf("Expected 1 transition fired in first step, got %d", firedCount)
 	}
-	
-	// Check final state
+	// After first step: Place1 empty, Place2 has token (value 2), Place3 empty
+	if marking.HasTokens("Place1") == true {
+					t.Error("Place1 should be empty after first step")
+	}
+	if !marking.HasTokens("Place2") {
+					t.Error("Place2 should have token after first step")
+	}
+	if marking.HasTokens("Place3") {
+					t.Error("Place3 should be empty after first step")
+	}
+
+	// Perform second simulation step (layer 2) - second transition fires
+	secondFired, err := eng.SimulateStep(cpn, marking)
+	if err != nil {
+					t.Fatalf("Failed to simulate second step: %v", err)
+	}
+	if secondFired != 1 {
+					t.Errorf("Expected 1 transition fired in second step, got %d", secondFired)
+	}
+
+	// Final state after two steps
 	if marking.HasTokens("Place1") || marking.HasTokens("Place2") {
-		t.Error("Place1 and Place2 should be empty")
+					t.Error("Place1 and Place2 should be empty after second step")
 	}
 	if !marking.HasTokens("Place3") {
-		t.Error("Place3 should have tokens")
+					t.Error("Place3 should have tokens after second step")
 	}
-	
-	tokens := marking.GetTokens("Place3")
+	 tokens := marking.GetTokens("Place3")
 	if len(tokens) != 1 || tokens[0].Value != 3 {
-		t.Errorf("Expected token value 3 in Place3, got %v", tokens)
+					t.Errorf("Expected token value 3 in Place3 after two steps, got %v", tokens)
 	}
 }
 

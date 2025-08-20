@@ -72,7 +72,17 @@ curl -X POST {$FLOW_SVC}/api/transitions/fire \
 curl -X POST "{$FLOW_SVC}/api/simulation/step?id=test-cpn"
 ```
 
-## 8. Validate a CPN (rule violations & diagnostics)
+## 8. Simulate Multiple Steps
+```sh
+curl -X POST "{$FLOW_SVC}/api/simulation/steps?id=test-cpn&steps=10"
+```
+
+## 9. Reset CPN to Initial Marking
+```sh
+curl -X POST "{$FLOW_SVC}/api/cpn/reset?id=test-cpn"
+```
+
+## 10. Validate a CPN (rule violations & diagnostics)
 ```sh
 curl -X GET "${FLOW_SVC}/api/cpn/validate?id=test-cpn"
 ```
@@ -81,3 +91,5 @@ curl -X GET "${FLOW_SVC}/api/cpn/validate?id=test-cpn"
 - Replace `localhost:8080` with your actual server address/port if different.
 - The example payloads match those used in the Go test cases.
 - For endpoints requiring a CPN to be loaded, run the "Load a CPN Definition" command first.
+- After a reset, the marking reverts; re-check with the marking endpoint.
+- Multiple steps stop early if no auto transitions fire or net completes.

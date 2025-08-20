@@ -456,51 +456,31 @@ func TestAPISimulateStep(t *testing.T) {
 	handler := server.SetupRoutes()
 	handler.ServeHTTP(loadRR, loadReq)
 
-	// Test simulate step
-	req, err := http.NewRequest("POST", "/api/simulation/step?id=simulate-test-cpn", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	// First simulate step (layer 1)
+	req1, err := http.NewRequest("POST", "/api/simulation/step?id=simulate-test-cpn", nil)
+	if err != nil { t.Fatalf("Failed to create request: %v", err) }
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	if status := rr1.Code; status != http.StatusOK { t.Errorf("Expected status code %d, got %d", http.StatusOK, status) }
+	var response1 api.SuccessResponse
+	if err := json.Unmarshal(rr1.Body.Bytes(), &response1); err != nil { t.Fatalf("Failed to parse response: %v", err) }
+	if !response1.Success { t.Error("Expected success to be true (step 1)") }
+	data1, ok := response1.Data.(map[string]interface{}); if !ok { t.Fatal("Expected data to be a map (step 1)") }
+	if int(data1["transitionsFired"].(float64)) != 1 { t.Errorf("Expected 1 transition fired in step 1, got %v", data1["transitionsFired"]) }
+	if data1["completed"].(bool) { t.Error("Did not expect CPN to be completed after first step") }
 
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, status)
-	}
-
-	var response api.SuccessResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if !response.Success {
-		t.Error("Expected success to be true")
-	}
-
-	// Check simulation result
-	data, ok := response.Data.(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected data to be a map")
-	}
-
-	transitionsFired, ok := data["transitionsFired"].(float64)
-	if !ok {
-		t.Fatal("Expected transitionsFired to be a number")
-	}
-
-	if int(transitionsFired) != 2 {
-		t.Errorf("Expected 2 transitions fired, got %d", int(transitionsFired))
-	}
-
-	completed, ok := data["completed"].(bool)
-	if !ok {
-		t.Fatal("Expected completed to be a boolean")
-	}
-
-	if !completed {
-		t.Error("Expected CPN to be completed")
-	}
+	// Second simulate step (layer 2)
+	req2, err := http.NewRequest("POST", "/api/simulation/step?id=simulate-test-cpn", nil)
+	if err != nil { t.Fatalf("Failed to create request: %v", err) }
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	if status := rr2.Code; status != http.StatusOK { t.Errorf("Expected status code %d, got %d", http.StatusOK, status) }
+	var response2 api.SuccessResponse
+	if err := json.Unmarshal(rr2.Body.Bytes(), &response2); err != nil { t.Fatalf("Failed to parse response: %v", err) }
+	if !response2.Success { t.Error("Expected success to be true (step 2)") }
+	data2, ok := response2.Data.(map[string]interface{}); if !ok { t.Fatal("Expected data to be a map (step 2)") }
+	if int(data2["transitionsFired"].(float64)) != 1 { t.Errorf("Expected 1 transition fired in step 2, got %v", data2["transitionsFired"]) }
+	if !data2["completed"].(bool) { t.Error("Expected CPN to be completed after second step") }
 }
 
 func TestAPIHealthCheck(t *testing.T) {
