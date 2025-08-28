@@ -56,10 +56,10 @@ type CaseResponse struct {
 }
 
 type CaseListResponse struct {
-	Cases      []CaseResponse `json:"cases"`
-	Total      int            `json:"total"`
-	Offset     int            `json:"offset"`
-	Limit      int            `json:"limit"`
+	Cases  []CaseResponse `json:"cases"`
+	Total  int            `json:"total"`
+	Offset int            `json:"offset"`
+	Limit  int            `json:"limit"`
 }
 
 type CaseExecutionResponse struct {
@@ -82,15 +82,15 @@ func (h *CaseHandlers) caseToResponse(case_ *models.Case) CaseResponse {
 		Variables:   case_.Variables,
 		Metadata:    case_.Metadata,
 	}
-	
+
 	if case_.StartedAt != nil {
 		response.StartedAt = case_.StartedAt
 	}
-	
+
 	if case_.CompletedAt != nil {
 		response.CompletedAt = case_.CompletedAt
 	}
-	
+
 	return response
 }
 
@@ -514,13 +514,16 @@ func (h *CaseHandlers) GetCaseTransitions(w http.ResponseWriter, r *http.Request
 	for _, transition := range enabledTransitions {
 		bindingCount := len(bindingsMap[transition.ID])
 		transitions = append(transitions, TransitionInfo{
-			ID:              transition.ID,
-			Name:            transition.Name,
-			Enabled:         true,
-			Kind:            string(transition.Kind),
-			GuardExpression: transition.GuardExpression,
-			Variables:       transition.Variables,
-			BindingCount:    bindingCount,
+			ID:               transition.ID,
+			Name:             transition.Name,
+			Enabled:          true,
+			Kind:             string(transition.Kind),
+			GuardExpression:  transition.GuardExpression,
+			Variables:        transition.Variables,
+			BindingCount:     bindingCount,
+			ActionExpression: transition.ActionExpression,
+			FormSchema:       transition.FormSchema,
+			LayoutSchema:     transition.LayoutSchema,
 		})
 	}
 
@@ -571,4 +574,3 @@ func (h *CaseHandlers) GetCaseStatistics(w http.ResponseWriter, r *http.Request)
 	stats := h.caseManager.GetCaseStatistics()
 	h.writeSuccess(w, stats, "")
 }
-

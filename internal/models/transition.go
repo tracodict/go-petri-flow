@@ -20,6 +20,8 @@ type Transition struct {
 	Kind             TransitionKind `json:"kind"`            // Auto or Manual
 	Position         *Position      `json:"position,omitempty"`
 	ActionExpression string         `json:"actionExpression,omitempty"` // Optional Lua action executed when firing (after inputs consumed, before outputs)
+	FormSchema       string         `json:"formSchema,omitempty"`       // Name of JSON Schema for manual transition form
+	LayoutSchema     string         `json:"layoutSchema,omitempty"`     // Name of JSON Schema for manual transition layout/UX
 }
 
 // NewTransition creates a new transition with the given parameters
@@ -33,6 +35,8 @@ func NewTransition(id, name string) *Transition {
 		Kind:             TransitionKindAuto,
 		Position:         nil,
 		ActionExpression: "",
+		FormSchema:       "",
+		LayoutSchema:     "",
 	}
 }
 
@@ -46,6 +50,8 @@ func NewTransitionWithGuard(id, name, guardExpression string, variables []string
 		TransitionDelay:  0,
 		Kind:             TransitionKindAuto,
 		ActionExpression: "",
+		FormSchema:       "",
+		LayoutSchema:     "",
 	}
 }
 
@@ -113,5 +119,7 @@ func (t *Transition) Clone() *Transition {
 		TransitionDelay:  t.TransitionDelay,
 		Kind:             t.Kind,
 		ActionExpression: t.ActionExpression,
+		FormSchema:       t.FormSchema,
+		LayoutSchema:     t.LayoutSchema,
 	}
 }

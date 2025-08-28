@@ -109,7 +109,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a3","sourceId":"p_mid","targetId":"t_double","expression":"x","direction":"IN"},
 			{"id":"a4","sourceId":"t_double","targetId":"p_done","expression":"x*2","direction":"OUT"}
 		],
-		"initialMarking": {"Stage1": [ {"value":2,"timestamp":0}, {"value":7,"timestamp":0} ]}
+		"initialMarking": {"p_in": [ {"value":2,"timestamp":0}, {"value":7,"timestamp":0} ]}
 	}'
 ```
 Run one automatic simulation step (only Inc fires):

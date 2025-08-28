@@ -11,15 +11,13 @@ import (
 func TestJSONColorSet_Untyped(t *testing.T) {
 	parser := models.NewCPNParser()
 	def := models.CPNDefinitionJSON{
-		ID:          "json-untyped",
-		Name:        "json-untyped",
-		ColorSets:   []string{"colset Meta = json;"},
-		Places:      []models.PlaceJSON{{ID: "p1", Name: "MetaIn", ColorSet: "Meta"}},
-		Transitions: []models.TransitionJSON{},
-		Arcs:        []models.ArcJSON{},
-		InitialMarking: map[string][]models.TokenJSON{
-			"MetaIn": {{Value: map[string]interface{}{"k": "v", "n": 1}, Timestamp: 0}},
-		},
+		ID:             "json-untyped",
+		Name:           "json-untyped",
+		ColorSets:      []string{"colset Meta = json;"},
+		Places:         []models.PlaceJSON{{ID: "p1", Name: "MetaIn", ColorSet: "Meta"}},
+		Transitions:    []models.TransitionJSON{},
+		Arcs:           []models.ArcJSON{},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: map[string]interface{}{"k": "v", "n": 1}, Timestamp: 0}}},
 	}
 	_, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -31,16 +29,14 @@ func TestJSONColorSet_WithSchemaValid(t *testing.T) {
 	parser := models.NewCPNParser()
 	schema := map[string]interface{}{"type": "object", "required": []interface{}{"id", "total"}, "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}, "total": map[string]interface{}{"type": "number"}}}
 	def := models.CPNDefinitionJSON{
-		ID:          "json-schema",
-		Name:        "json-schema",
-		JsonSchemas: []models.JsonSchemaDef{{Name: "OrderSchema", Schema: schema}},
-		ColorSets:   []string{"colset Order = json<OrderSchema>;"},
-		Places:      []models.PlaceJSON{{ID: "p1", Name: "Orders", ColorSet: "Order"}},
-		Transitions: []models.TransitionJSON{},
-		Arcs:        []models.ArcJSON{},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Orders": {{Value: map[string]interface{}{"id": "A1", "total": 10.5}, Timestamp: 0}},
-		},
+		ID:             "json-schema",
+		Name:           "json-schema",
+		JsonSchemas:    []models.JsonSchemaDef{{Name: "OrderSchema", Schema: schema}},
+		ColorSets:      []string{"colset Order = json<OrderSchema>;"},
+		Places:         []models.PlaceJSON{{ID: "p1", Name: "Orders", ColorSet: "Order"}},
+		Transitions:    []models.TransitionJSON{},
+		Arcs:           []models.ArcJSON{},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: map[string]interface{}{"id": "A1", "total": 10.5}, Timestamp: 0}}},
 	}
 	_, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -52,17 +48,14 @@ func TestJSONColorSet_WithSchemaInvalid(t *testing.T) {
 	parser := models.NewCPNParser()
 	schema := map[string]interface{}{"type": "object", "required": []interface{}{"id", "total"}, "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}, "total": map[string]interface{}{"type": "number"}}}
 	def := models.CPNDefinitionJSON{
-		ID:          "json-schema-bad",
-		Name:        "json-schema-bad",
-		JsonSchemas: []models.JsonSchemaDef{{Name: "OrderSchema", Schema: schema}},
-		ColorSets:   []string{"colset Order = json<OrderSchema>;"},
-		Places:      []models.PlaceJSON{{ID: "p1", Name: "Orders", ColorSet: "Order"}},
-		Transitions: []models.TransitionJSON{},
-		Arcs:        []models.ArcJSON{},
-		InitialMarking: map[string][]models.TokenJSON{
-			// Missing total
-			"Orders": {{Value: map[string]interface{}{"id": "A1"}, Timestamp: 0}},
-		},
+		ID:             "json-schema-bad",
+		Name:           "json-schema-bad",
+		JsonSchemas:    []models.JsonSchemaDef{{Name: "OrderSchema", Schema: schema}},
+		ColorSets:      []string{"colset Order = json<OrderSchema>;"},
+		Places:         []models.PlaceJSON{{ID: "p1", Name: "Orders", ColorSet: "Order"}},
+		Transitions:    []models.TransitionJSON{},
+		Arcs:           []models.ArcJSON{},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: map[string]interface{}{"id": "A1"}, Timestamp: 0}}},
 	}
 	_, err := parser.ParseCPNFromDefinition(&def)
 	if err == nil {
@@ -73,15 +66,13 @@ func TestJSONColorSet_WithSchemaInvalid(t *testing.T) {
 func TestJSONColorSet_AliasMap(t *testing.T) {
 	parser := models.NewCPNParser()
 	def := models.CPNDefinitionJSON{
-		ID:          "json-map-alias",
-		Name:        "json-map-alias",
-		ColorSets:   []string{"colset Legacy = map;"},
-		Places:      []models.PlaceJSON{{ID: "p1", Name: "Legacy", ColorSet: "Legacy"}},
-		Transitions: []models.TransitionJSON{},
-		Arcs:        []models.ArcJSON{},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Legacy": {{Value: map[string]interface{}{"hello": "world"}, Timestamp: 0}},
-		},
+		ID:             "json-map-alias",
+		Name:           "json-map-alias",
+		ColorSets:      []string{"colset Legacy = map;"},
+		Places:         []models.PlaceJSON{{ID: "p1", Name: "Legacy", ColorSet: "Legacy"}},
+		Transitions:    []models.TransitionJSON{},
+		Arcs:           []models.ArcJSON{},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: map[string]interface{}{"hello": "world"}, Timestamp: 0}}},
 	}
 	_, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -101,7 +92,7 @@ func TestJSONColorSet_OutputTransformation(t *testing.T) {
 		Places:         []models.PlaceJSON{{ID: "p_in", Name: "In", ColorSet: "Order"}, {ID: "p_out", Name: "Out", ColorSet: "Order"}},
 		Transitions:    []models.TransitionJSON{{ID: "t1", Name: "T", Kind: "Auto"}},
 		Arcs:           []models.ArcJSON{{ID: "a_in", SourceID: "p_in", TargetID: "t1", Expression: "order", Direction: "IN"}, {ID: "a_out", SourceID: "t1", TargetID: "p_out", Expression: "local o=order; o.flag=\"X\"; return o", Direction: "OUT"}},
-		InitialMarking: map[string][]models.TokenJSON{"In": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
+		InitialMarking: map[string][]models.TokenJSON{"p_in": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
 	}
 	cpn, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -111,9 +102,9 @@ func TestJSONColorSet_OutputTransformation(t *testing.T) {
 	defer eng.Close()
 	marking := models.NewMarking()
 	// seed initial marking
-	for placeName, toks := range cpn.InitialMarking {
+	for placeID, toks := range cpn.InitialMarking {
 		for _, tk := range toks {
-			marking.AddToken(placeName, tk)
+			marking.AddToken(placeID, tk)
 		}
 	}
 	enabled, bindings, err := eng.GetEnabledTransitions(cpn, marking)
@@ -124,7 +115,7 @@ func TestJSONColorSet_OutputTransformation(t *testing.T) {
 		t.Fatalf("fire failed: %v", err)
 	}
 	// verify new token has flag
-	out := marking.Places["Out"].GetAllTokens()
+	out := marking.Places["p_out"].GetAllTokens()
 	if len(out) != 1 {
 		t.Fatalf("expected 1 token in Out")
 	}
@@ -146,7 +137,7 @@ func TestJSONColorSet_Guard(t *testing.T) {
 		Places:         []models.PlaceJSON{{ID: "p_in", Name: "In", ColorSet: "Order"}},
 		Transitions:    []models.TransitionJSON{{ID: "t1", Name: "T", Kind: "Manual", GuardExpression: "order.total > 10", Variables: []string{"order"}}},
 		Arcs:           []models.ArcJSON{{ID: "a_in", SourceID: "p_in", TargetID: "t1", Expression: "order", Direction: "IN"}},
-		InitialMarking: map[string][]models.TokenJSON{"In": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
+		InitialMarking: map[string][]models.TokenJSON{"p_in": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
 	}
 	cpn, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -155,9 +146,9 @@ func TestJSONColorSet_Guard(t *testing.T) {
 	eng := engine.NewEngine()
 	defer eng.Close()
 	marking := models.NewMarking()
-	for placeName, toks := range cpn.InitialMarking {
+	for placeID, toks := range cpn.InitialMarking {
 		for _, tk := range toks {
-			marking.AddToken(placeName, tk)
+			marking.AddToken(placeID, tk)
 		}
 	}
 	enabled, _, err := eng.GetEnabledTransitions(cpn, marking)
@@ -181,7 +172,7 @@ func TestJSONColorSet_OutputSchemaViolation(t *testing.T) {
 		Places:         []models.PlaceJSON{{ID: "p_in", Name: "In", ColorSet: "Order"}, {ID: "p_out", Name: "Out", ColorSet: "Order"}},
 		Transitions:    []models.TransitionJSON{{ID: "t1", Name: "T", Kind: "Auto"}},
 		Arcs:           []models.ArcJSON{{ID: "a_in", SourceID: "p_in", TargetID: "t1", Expression: "order", Direction: "IN"}, {ID: "a_out", SourceID: "t1", TargetID: "p_out", Expression: "return { id = order.id, total = \"oops\" }", Direction: "OUT"}},
-		InitialMarking: map[string][]models.TokenJSON{"In": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
+		InitialMarking: map[string][]models.TokenJSON{"p_in": {{Value: map[string]interface{}{"id": "A", "total": 5}, Timestamp: 0}}},
 	}
 	cpn, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -217,7 +208,7 @@ func TestJSONColorSet_ArrayOutputUntyped(t *testing.T) {
 		Places:         []models.PlaceJSON{{ID: "p_in", Name: "In", ColorSet: "J"}, {ID: "p_out", Name: "Out", ColorSet: "J"}},
 		Transitions:    []models.TransitionJSON{{ID: "t1", Name: "T", Kind: "Auto"}},
 		Arcs:           []models.ArcJSON{{ID: "a_in", SourceID: "p_in", TargetID: "t1", Expression: "x", Direction: "IN"}, {ID: "a_out", SourceID: "t1", TargetID: "p_out", Expression: "return {1,2,3}", Direction: "OUT"}},
-		InitialMarking: map[string][]models.TokenJSON{"In": {{Value: []interface{}{map[string]interface{}{"dummy": true}}, Timestamp: 0}}},
+		InitialMarking: map[string][]models.TokenJSON{"p_in": {{Value: []interface{}{map[string]interface{}{"dummy": true}}, Timestamp: 0}}},
 	}
 	cpn, err := parser.ParseCPNFromDefinition(&def)
 	if err != nil {
@@ -241,7 +232,7 @@ func TestJSONColorSet_ArrayOutputUntyped(t *testing.T) {
 	if err := eng.FireTransition(cpn, enabled[0], bindings[enabled[0].ID][0], marking); err != nil {
 		t.Fatalf("fire failed: %v", err)
 	}
-	if marking.Places["Out"].Size() == 0 {
+	if marking.Places["p_out"].Size() == 0 {
 		t.Fatalf("expected token array output")
 	}
 }

@@ -35,8 +35,8 @@ curl -X POST {$FLOW_SVC}/api/cpn/load \
       {"id": "a3", "sourceId": "p3", "targetId": "t1", "expression": "m", "direction": "IN"}
     ],
     "initialMarking": {
-      "Place1": [{"value": 5, "timestamp": 0}],
-      "JsonPlace": [{"value": {"foo": "bar", "num": 42}, "timestamp": 0}]
+      "p1": [{"value": 5, "timestamp": 0}],
+      "p3": [{"value": {"foo": "bar", "num": 42}, "timestamp": 0}]
     }
   }'
 ```

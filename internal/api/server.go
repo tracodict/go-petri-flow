@@ -24,6 +24,7 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 
 	// Transitions
 	mux.HandleFunc("/api/transitions/list", s.corsMiddleware(s.GetTransitions))
+	mux.HandleFunc("/api/transitions/enabled", s.corsMiddleware(s.GetEnabledTransitions))
 	mux.HandleFunc("/api/transitions/fire", s.corsMiddleware(s.FireTransition))
 
 	// Simulation

@@ -29,7 +29,7 @@ func NewServer() *Server {
 	engine := engine.NewEngine()
 	caseManager := case_manager.NewManager(engine)
 	workItemManager := workitem.NewManager(caseManager)
-	
+
 	server := &Server{
 		engine:           engine,
 		parser:           models.NewCPNParser(),
@@ -40,7 +40,7 @@ func NewServer() *Server {
 		workItemManager:  workItemManager,
 		workItemHandlers: NewWorkItemHandlers(workItemManager),
 	}
-	
+
 	return server
 }
 
@@ -76,8 +76,8 @@ type CPNInfo struct {
 }
 
 type MarkingResponse struct {
-	GlobalClock int                     `json:"globalClock"`
-	Places      map[string][]TokenInfo  `json:"places"`
+	GlobalClock int                    `json:"globalClock"`
+	Places      map[string][]TokenInfo `json:"places"`
 }
 
 type TokenInfo struct {
@@ -86,19 +86,29 @@ type TokenInfo struct {
 }
 
 type TransitionInfo struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Enabled         bool     `json:"enabled"`
-	Kind            string   `json:"kind"`
-	GuardExpression string   `json:"guardExpression,omitempty"`
-	Variables       []string `json:"variables,omitempty"`
-	BindingCount    int      `json:"bindingCount"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Enabled          bool     `json:"enabled"`
+	Kind             string   `json:"kind"`
+	GuardExpression  string   `json:"guardExpression,omitempty"`
+	Variables        []string `json:"variables,omitempty"`
+	BindingCount     int      `json:"bindingCount"`
+	ActionExpression string   `json:"actionExpression,omitempty"`
+	FormSchema       string   `json:"formSchema,omitempty"`
+	LayoutSchema     string   `json:"layoutSchema,omitempty"`
+}
+
+// EnabledTransitionDetail extends TransitionInfo with concrete bindings
+type EnabledTransitionDetail struct {
+	TransitionInfo
+	Bindings []map[string]interface{} `json:"bindings"` // variable -> token value
 }
 
 type SimulationStepResponse struct {
 	TransitionsFired int             `json:"transitionsFired"`
 	Completed        bool            `json:"completed"`
 	NewMarking       MarkingResponse `json:"newMarking"`
+	CurrentStep      int             `json:"currentStep"`
 }
 
 // Helper functions
@@ -129,34 +139,26 @@ func (s *Server) getCPN(cpnID string) (*models.CPN, *models.Marking, error) {
 	if !exists {
 		return nil, nil, fmt.Errorf("CPN with ID %s not found", cpnID)
 	}
-	
+
 	marking, exists := s.states[cpnID]
 	if !exists {
 		return nil, nil, fmt.Errorf("marking for CPN %s not found", cpnID)
 	}
-	
+
 	return cpn, marking, nil
 }
 
 func (s *Server) markingToResponse(marking *models.Marking) MarkingResponse {
 	places := make(map[string][]TokenInfo)
-	
-	for placeName, multiset := range marking.Places {
-		tokens := multiset.GetAllTokens()
-		tokenInfos := make([]TokenInfo, len(tokens))
-		for i, token := range tokens {
-			tokenInfos[i] = TokenInfo{
-				Value:     token.Value,
-				Timestamp: token.Timestamp,
-			}
+	for placeID, multiset := range marking.Places {
+		all := multiset.GetAllTokens()
+		infos := make([]TokenInfo, len(all))
+		for i, tk := range all {
+			infos[i] = TokenInfo{Value: tk.Value, Timestamp: tk.Timestamp}
 		}
-		places[placeName] = tokenInfos
+		places[placeID] = infos
 	}
-	
-	return MarkingResponse{
-		GlobalClock: marking.GlobalClock,
-		Places:      places,
-	}
+	return MarkingResponse{GlobalClock: marking.GlobalClock, Places: places}
 }
 
 // API Handlers
@@ -174,16 +176,16 @@ func (s *Server) LoadCPN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cpn, err := s.parser.ParseCPNFromDefinition(&cpnDef)
+	cpn, err := s.parser.ParseCPNFromDefinition(&cpnDef) // Ensure marking exists when CPN loaded
 	if err != nil {
 		s.writeError(w, http.StatusBadRequest, "invalid_cpn", "Failed to parse CPN: "+err.Error())
 		return
 	}
 
-	// Store the CPN and create initial marking
+	// Store the CPN and its initial marking (reset step counter)
 	s.cpns[cpn.ID] = cpn
-	s.states[cpn.ID] = cpn.CreateInitialMarking()
-	
+	s.states[cpn.ID] = cpn.CreateInitialMarking() // Fix GetCPN to use stored marking directly
+
 	// Register CPN with case manager
 	s.caseManager.RegisterCPN(cpn)
 
@@ -209,7 +211,7 @@ func (s *Server) ListCPNs(w http.ResponseWriter, r *http.Request) {
 		if s.engine.IsCompleted(cpn, marking) {
 			status = "completed"
 		}
-		
+
 		cpns = append(cpns, CPNInfo{
 			ID:          cpn.ID,
 			Name:        cpn.Name,
@@ -247,10 +249,16 @@ func (s *Server) GetCPN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cpnData interface{}
+	var cpnData map[string]interface{}
 	if err := json.Unmarshal(jsonData, &cpnData); err != nil {
 		s.writeError(w, http.StatusInternalServerError, "serialization_error", "Failed to parse CPN JSON: "+err.Error())
 		return
+	}
+
+	// Attach runtime status (global clock & current step) from stored state
+	if marking, ok := s.states[cpnID]; ok {
+		cpnData["globalClock"] = marking.GlobalClock
+		cpnData["currentStep"] = marking.StepCounter
 	}
 
 	s.writeSuccess(w, cpnData, "")
@@ -318,17 +326,76 @@ func (s *Server) GetTransitions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		transitions = append(transitions, TransitionInfo{
-			ID:              transition.ID,
-			Name:            transition.Name,
-			Enabled:         enabled,
-			Kind:            string(transition.Kind),
-			GuardExpression: transition.GuardExpression,
-			Variables:       transition.Variables,
-			BindingCount:    bindingCount,
+			ID:               transition.ID,
+			Name:             transition.Name,
+			Enabled:          enabled,
+			Kind:             string(transition.Kind),
+			GuardExpression:  transition.GuardExpression,
+			Variables:        transition.Variables,
+			BindingCount:     bindingCount,
+			ActionExpression: transition.ActionExpression,
+			FormSchema:       transition.FormSchema,
+			LayoutSchema:     transition.LayoutSchema,
 		})
 	}
 
 	s.writeSuccess(w, transitions, "")
+}
+
+// GetEnabledTransitions returns only enabled transitions with full binding candidates
+func (s *Server) GetEnabledTransitions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET method is allowed")
+		return
+	}
+
+	cpnID := r.URL.Query().Get("id")
+	if cpnID == "" {
+		s.writeError(w, http.StatusBadRequest, "missing_parameter", "CPN ID is required")
+		return
+	}
+
+	cpn, marking, err := s.getCPN(cpnID)
+	if err != nil {
+		s.writeError(w, http.StatusNotFound, "cpn_not_found", err.Error())
+		return
+	}
+
+	enabledTransitions, bindingsMap, err := s.engine.GetEnabledTransitions(cpn, marking)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "engine_error", "Failed to get enabled transitions: "+err.Error())
+		return
+	}
+
+	var details []EnabledTransitionDetail
+	for _, t := range enabledTransitions {
+		bindings := bindingsMap[t.ID]
+		bindingObjs := make([]map[string]interface{}, 0, len(bindings))
+		for _, b := range bindings {
+			obj := make(map[string]interface{})
+			for varName, token := range b {
+				obj[varName] = token.Value
+			}
+			bindingObjs = append(bindingObjs, obj)
+		}
+		details = append(details, EnabledTransitionDetail{
+			TransitionInfo: TransitionInfo{
+				ID:               t.ID,
+				Name:             t.Name,
+				Enabled:          true,
+				Kind:             string(t.Kind),
+				GuardExpression:  t.GuardExpression,
+				Variables:        t.Variables,
+				BindingCount:     len(bindings),
+				ActionExpression: t.ActionExpression,
+				FormSchema:       t.FormSchema,
+				LayoutSchema:     t.LayoutSchema,
+			},
+			Bindings: bindingObjs,
+		})
+	}
+
+	s.writeSuccess(w, details, "")
 }
 
 // FireTransition manually fires a specific transition
@@ -420,6 +487,7 @@ func (s *Server) SimulateStep(w http.ResponseWriter, r *http.Request) {
 		TransitionsFired: firedCount,
 		Completed:        completed,
 		NewMarking:       s.markingToResponse(marking),
+		CurrentStep:      marking.StepCounter,
 	}
 
 	s.writeSuccess(w, response, "")
@@ -478,6 +546,7 @@ func (s *Server) SimulateSteps(w http.ResponseWriter, r *http.Request) {
 		TransitionsFired: totalFired,
 		Completed:        completed,
 		NewMarking:       s.markingToResponse(marking),
+		CurrentStep:      marking.StepCounter,
 	}
 
 	s.writeSuccess(w, response, "")
@@ -528,10 +597,9 @@ func (s *Server) DeleteCPN(w http.ResponseWriter, r *http.Request) {
 
 	delete(s.cpns, cpnID)
 	delete(s.states, cpnID)
-	
+
 	// Unregister from case manager
 	s.caseManager.UnregisterCPN(cpnID)
 
 	s.writeSuccess(w, nil, "CPN deleted successfully")
 }
-

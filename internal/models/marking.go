@@ -7,10 +7,11 @@ import (
 )
 
 // Marking represents the state of a CPN instance (case)
-// It maps place names to their multisets and includes a global clock
+// It maps place IDs to their multisets and includes a global clock
 type Marking struct {
-	Places      map[string]Multiset `json:"places"`      // Key: Place Name
+	Places      map[string]Multiset `json:"places"` // Key: Place ID
 	GlobalClock int                 `json:"globalClock"`
+	StepCounter int                 `json:"currentStep"`
 }
 
 // NewMarking creates a new empty marking
@@ -18,6 +19,7 @@ func NewMarking() *Marking {
 	return &Marking{
 		Places:      make(map[string]Multiset),
 		GlobalClock: 0,
+		StepCounter: 0,
 	}
 }
 
@@ -26,25 +28,27 @@ func NewMarkingWithClock(globalClock int) *Marking {
 	return &Marking{
 		Places:      make(map[string]Multiset),
 		GlobalClock: globalClock,
+		StepCounter: 0,
 	}
 }
 
 // AddToken adds a token to the specified place
-func (m *Marking) AddToken(placeName string, token *Token) {
-	if m.Places[placeName] == nil {
-		m.Places[placeName] = NewMultiset()
+func (m *Marking) AddToken(placeID string, token *Token) {
+	if m.Places[placeID] == nil {
+		m.Places[placeID] = NewMultiset()
 	}
-	m.Places[placeName].Add(token)
+	m.Places[placeID].Add(token)
 }
 
 // RemoveToken removes a token from the specified place
 // Returns true if the token was found and removed, false otherwise
-func (m *Marking) RemoveToken(placeName string, token *Token) bool {
-	if multiset, exists := m.Places[placeName]; exists {
+
+func (m *Marking) RemoveToken(placeID string, token *Token) bool {
+	if multiset, exists := m.Places[placeID]; exists {
 		removed := multiset.Remove(token)
 		// If the place becomes empty, we can optionally remove it from the map
 		if multiset.IsEmpty() {
-			delete(m.Places, placeName)
+			delete(m.Places, placeID)
 		}
 		return removed
 	}
@@ -53,12 +57,13 @@ func (m *Marking) RemoveToken(placeName string, token *Token) bool {
 
 // RemoveTokenByValue removes the first token with the given value from the specified place
 // Returns the removed token if found, nil otherwise
-func (m *Marking) RemoveTokenByValue(placeName string, value interface{}) *Token {
-	if multiset, exists := m.Places[placeName]; exists {
+
+func (m *Marking) RemoveTokenByValue(placeID string, value interface{}) *Token {
+	if multiset, exists := m.Places[placeID]; exists {
 		token := multiset.RemoveByValue(value)
 		// If the place becomes empty, we can optionally remove it from the map
 		if multiset.IsEmpty() {
-			delete(m.Places, placeName)
+			delete(m.Places, placeID)
 		}
 		return token
 	}
@@ -67,69 +72,70 @@ func (m *Marking) RemoveTokenByValue(placeName string, value interface{}) *Token
 
 // GetMultiset returns the multiset for the specified place
 // Returns an empty multiset if the place doesn't exist
-func (m *Marking) GetMultiset(placeName string) Multiset {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) GetMultiset(placeID string) Multiset {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset
 	}
 	return NewMultiset()
 }
 
 // HasTokens checks if the specified place has any tokens
-func (m *Marking) HasTokens(placeName string) bool {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) HasTokens(placeID string) bool {
+	if multiset, exists := m.Places[placeID]; exists {
 		return !multiset.IsEmpty()
 	}
 	return false
 }
 
 // HasTokenWithValue checks if the specified place has a token with the given value
-func (m *Marking) HasTokenWithValue(placeName string, value interface{}) bool {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) HasTokenWithValue(placeID string, value interface{}) bool {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset.Contains(value)
 	}
 	return false
 }
 
 // CountTokens returns the total number of tokens in the specified place
-func (m *Marking) CountTokens(placeName string) int {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) CountTokens(placeID string) int {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset.Size()
 	}
 	return 0
 }
 
 // CountTokensWithValue returns the number of tokens with the given value in the specified place
-func (m *Marking) CountTokensWithValue(placeName string, value interface{}) int {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) CountTokensWithValue(placeID string, value interface{}) int {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset.Count(value)
 	}
 	return 0
 }
 
 // GetTokens returns all tokens in the specified place
-func (m *Marking) GetTokens(placeName string) []*Token {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) GetTokens(placeID string) []*Token {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset.GetAllTokens()
 	}
 	return []*Token{}
 }
 
 // GetTokensWithValue returns all tokens with the given value in the specified place
-func (m *Marking) GetTokensWithValue(placeName string, value interface{}) []*Token {
-	if multiset, exists := m.Places[placeName]; exists {
+func (m *Marking) GetTokensWithValue(placeID string, value interface{}) []*Token {
+	if multiset, exists := m.Places[placeID]; exists {
 		return multiset.GetTokens(value)
 	}
 	return []*Token{}
 }
 
 // GetPlaceNames returns all place names that have tokens
-func (m *Marking) GetPlaceNames() []string {
-	names := make([]string, 0, len(m.Places))
-	for name := range m.Places {
-		names = append(names, name)
+// GetPlaceIDs returns all place IDs that have tokens
+func (m *Marking) GetPlaceIDs() []string {
+	ids := make([]string, 0, len(m.Places))
+	for id := range m.Places {
+		ids = append(ids, id)
 	}
-	sort.Strings(names)
-	return names
+	sort.Strings(ids)
+	return ids
 }
 
 // IsEmpty returns true if the marking has no tokens in any place
@@ -194,11 +200,11 @@ func (m *Marking) Clone() *Marking {
 		Places:      make(map[string]Multiset),
 		GlobalClock: m.GlobalClock,
 	}
-	
-	for placeName, multiset := range m.Places {
-		clone.Places[placeName] = multiset.Clone()
+
+	for placeID, multiset := range m.Places {
+		clone.Places[placeID] = multiset.Clone()
 	}
-	
+
 	return clone
 }
 
@@ -209,18 +215,17 @@ func (m *Marking) String() string {
 	}
 
 	var parts []string
-	
-	// Sort place names for consistent output
-	placeNames := m.GetPlaceNames()
-	
-	for _, placeName := range placeNames {
-		multiset := m.Places[placeName]
+
+	// Sort place IDs for consistent output
+	placeIDs := m.GetPlaceIDs()
+
+	for _, placeID := range placeIDs {
+		multiset := m.Places[placeID]
 		if !multiset.IsEmpty() {
-			parts = append(parts, fmt.Sprintf("%s: %s", placeName, multiset.String()))
+			parts = append(parts, fmt.Sprintf("%s: %s", placeID, multiset.String()))
 		}
 	}
 
 	placesStr := "{" + strings.Join(parts, ", ") + "}"
 	return fmt.Sprintf("Marking{GlobalClock: %d, Places: %s}", m.GlobalClock, placesStr)
 }
-

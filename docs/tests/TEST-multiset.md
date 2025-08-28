@@ -28,7 +28,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in","sourceId":"p_src","targetId":"t_move","expression":"x","direction":"IN"},
 			{"id":"a_out","sourceId":"t_move","targetId":"p_dst","expression":"x","direction":"OUT"}
 		],
-		"initialMarking": {"Src": [ {"value":5,"timestamp":0}, {"value":5,"timestamp":0} ]}
+		"initialMarking": {"p_src": [ {"value":5,"timestamp":0}, {"value":5,"timestamp":0} ]}
 	}'
 ```
 
@@ -50,7 +50,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in","sourceId":"p_src","targetId":"t_move","expression":"x","direction":"IN"},
 			{"id":"a_out","sourceId":"t_move","targetId":"p_dst","expression":"x","direction":"OUT"}
 		],
-		"initialMarking": {"Src": [ {"value":5,"timestamp":0,"count":2} ]}
+		"initialMarking": {"p_src": [ {"value":5,"timestamp":0,"count":400} ]}
 	}'
 ```
 Inspect marking (expect two tokens with same value at source):
@@ -93,11 +93,12 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in","sourceId":"p_mix","targetId":"t_take7","expression":"7","direction":"IN"},
 			{"id":"a_out","sourceId":"t_take7","targetId":"p_out","expression":"7","direction":"OUT"}
 		],
-	"initialMarking": {"Mix": [ {"value":7,"timestamp":0,"count":2}, {"value":3,"timestamp":0} ]}
+	"initialMarking": {"p_mix": [ {"value":7,"timestamp":0,"count":2}, {"value":3,"timestamp":0} ]}
 	}'
 ```
 Fire once (should remove one of the 7s):
 ```sh
+curl -X GET "{$FLOW_SVC}/api/cpn/get?id=ms-cpn-2"
 curl -X POST ${FLOW_SVC}/api/transitions/fire -H 'Content-Type: application/json' \
 	-d '{"cpnId":"ms-cpn-2","transitionId":"t_take7","bindingIndex":0}'
 curl -X GET "${FLOW_SVC}/api/marking/get?id=ms-cpn-2"

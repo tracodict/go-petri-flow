@@ -290,11 +290,11 @@ func TestCPN(t *testing.T) {
 		t.Error("Should retrieve correct output arcs")
 	}
 
-	// Test initial marking
+	// Test initial marking (by place ID)
 	token := models.NewToken(1, 0)
-	cpn.AddInitialToken("Place1", token)
+	cpn.AddInitialToken("p1", token)
 	marking := cpn.CreateInitialMarking()
-	if !marking.HasTokens("Place1") {
+	if !marking.HasTokens("p1") {
 		t.Error("Initial marking should have tokens in Place1")
 	}
 

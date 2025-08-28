@@ -12,15 +12,19 @@ import (
 
 // ColorSetParser handles parsing of color set definitions from strings
 type ColorSetParser struct {
-	colorSets   map[string]ColorSet           // Registry of defined color sets
-	jsonSchemas map[string]*jsonschema.Schema // Compiled JSON Schemas
+	colorSets           map[string]ColorSet           // Registry of defined color sets
+	jsonSchemas         map[string]*jsonschema.Schema // Compiled JSON Schemas
+	originalJsonSchemas map[string]interface{}        // Original JSON schema objects (for round-trip)
+	colorSetDefinitions []string                      // Original color set definition strings (for round-trip)
 }
 
 // NewColorSetParser creates a new color set parser
 func NewColorSetParser() *ColorSetParser {
 	parser := &ColorSetParser{
-		colorSets:   make(map[string]ColorSet),
-		jsonSchemas: make(map[string]*jsonschema.Schema),
+		colorSets:           make(map[string]ColorSet),
+		jsonSchemas:         make(map[string]*jsonschema.Schema),
+		originalJsonSchemas: make(map[string]interface{}),
+		colorSetDefinitions: []string{},
 	}
 
 	// Register built-in color sets
@@ -57,6 +61,8 @@ func (p *ColorSetParser) ParseColorSetDefinition(definition string) (ColorSet, e
 	if !strings.HasSuffix(definition, ";") {
 		definition += ";"
 	}
+	// Preserve original (normalized) for round-trip if not already stored
+	p.colorSetDefinitions = append(p.colorSetDefinitions, definition)
 
 	// Basic regex to parse color set definitions
 	// colset NAME = TYPE [timed];
@@ -277,4 +283,23 @@ func (p *ColorSetParser) GetAllColorSets() map[string]ColorSet {
 		result[name] = cs
 	}
 	return result
+}
+
+// GetOriginalColorSetDefinitions returns the original color set definition strings
+func (p *ColorSetParser) GetOriginalColorSetDefinitions() []string {
+	return append([]string{}, p.colorSetDefinitions...)
+}
+
+// StoreOriginalJsonSchema stores the raw schema object by name
+func (p *ColorSetParser) StoreOriginalJsonSchema(name string, schema interface{}) {
+	p.originalJsonSchemas[name] = schema
+}
+
+// GetOriginalJsonSchemas returns original schema definitions
+func (p *ColorSetParser) GetOriginalJsonSchemas() []JsonSchemaDef {
+	var defs []JsonSchemaDef
+	for name, schema := range p.originalJsonSchemas {
+		defs = append(defs, JsonSchemaDef{Name: name, Schema: schema})
+	}
+	return defs
 }

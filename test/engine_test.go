@@ -32,7 +32,7 @@ func TestBasicTransitionFiring(t *testing.T) {
 	// Create initial marking
 	marking := models.NewMarking()
 	token := models.NewToken(5, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	// Create engine
 	eng := engine.NewEngine()
@@ -57,14 +57,13 @@ func TestBasicTransitionFiring(t *testing.T) {
 	}
 
 	// Check the result
-	if marking.HasTokens("Place1") {
+	if marking.HasTokens("p1") {
 		t.Error("Place1 should be empty after firing")
 	}
-	if !marking.HasTokens("Place2") {
+	if !marking.HasTokens("p2") {
 		t.Error("Place2 should have tokens after firing")
 	}
-
-	tokens := marking.GetTokens("Place2")
+	tokens := marking.GetTokens("p2")
 	if len(tokens) != 1 {
 		t.Errorf("Expected 1 token in Place2, got %d", len(tokens))
 	}
@@ -100,7 +99,7 @@ func TestTransitionWithGuard(t *testing.T) {
 	// Test with token value 5 (should not be enabled)
 	marking1 := models.NewMarking()
 	token1 := models.NewToken(5, 0)
-	marking1.AddToken("Place1", token1)
+	marking1.AddToken("p1", token1)
 
 	enabled, _, err := eng.IsEnabled(cpn, transition, marking1)
 	if err != nil {
@@ -113,7 +112,7 @@ func TestTransitionWithGuard(t *testing.T) {
 	// Test with token value 15 (should be enabled)
 	marking2 := models.NewMarking()
 	token2 := models.NewToken(15, 0)
-	marking2.AddToken("Place1", token2)
+	marking2.AddToken("p1", token2)
 
 	enabled, bindings, err := eng.IsEnabled(cpn, transition, marking2)
 	if err != nil {
@@ -130,7 +129,7 @@ func TestTransitionWithGuard(t *testing.T) {
 	}
 
 	// Check result
-	tokens := marking2.GetTokens("Place2")
+	tokens := marking2.GetTokens("p2")
 	if len(tokens) != 1 || tokens[0].Value != 15 {
 		t.Errorf("Expected token value 15 in Place2, got %v", tokens)
 	}
@@ -160,7 +159,7 @@ func TestTransitionDelay(t *testing.T) {
 	// Create marking with global clock 10
 	marking := models.NewMarkingWithClock(10)
 	token := models.NewToken(42, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	eng := engine.NewEngine()
 	defer eng.Close()
@@ -185,7 +184,7 @@ func TestTransitionDelay(t *testing.T) {
 	}
 
 	// Check that token was produced
-	tokens := marking.GetTokens("Place2")
+	tokens := marking.GetTokens("p2")
 	if len(tokens) != 1 || tokens[0].Value != 42 {
 		t.Errorf("Expected token value 42 in Place2, got %v", tokens)
 	}
@@ -225,7 +224,7 @@ func TestMultipleEnabledTransitions(t *testing.T) {
 	// Create marking
 	marking := models.NewMarking()
 	token := models.NewToken(5, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	eng := engine.NewEngine()
 	defer eng.Close()
@@ -250,13 +249,13 @@ func TestMultipleEnabledTransitions(t *testing.T) {
 	}
 
 	// Check that only one transition fired and Place1 is empty
-	if marking.HasTokens("Place1") {
+	if marking.HasTokens("p1") {
 		t.Error("Place1 should be empty after firing")
 	}
 
 	// Check that exactly one of Place2 or Place3 has tokens
-	hasPlace2 := marking.HasTokens("Place2")
-	hasPlace3 := marking.HasTokens("Place3")
+	hasPlace2 := marking.HasTokens("p2")
+	hasPlace3 := marking.HasTokens("p3")
 
 	if hasPlace2 && hasPlace3 {
 		t.Error("Only one of Place2 or Place3 should have tokens")
@@ -290,7 +289,7 @@ func TestManualTransition(t *testing.T) {
 	// Create marking
 	marking := models.NewMarking()
 	token := models.NewToken(42, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	eng := engine.NewEngine()
 	defer eng.Close()
@@ -321,10 +320,10 @@ func TestManualTransition(t *testing.T) {
 	}
 
 	// Check result
-	if marking.HasTokens("Place1") {
+	if marking.HasTokens("p1") {
 		t.Error("Place1 should be empty after manual firing")
 	}
-	if !marking.HasTokens("Place2") {
+	if !marking.HasTokens("p2") {
 		t.Error("Place2 should have tokens after manual firing")
 	}
 }
@@ -359,7 +358,7 @@ func TestSimulationStep(t *testing.T) {
 	// Initial marking
 	marking := models.NewMarking()
 	token := models.NewToken(1, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	eng := engine.NewEngine()
 	defer eng.Close()
@@ -373,13 +372,13 @@ func TestSimulationStep(t *testing.T) {
 		t.Errorf("Expected 1 transition fired in first step, got %d", firedCount)
 	}
 	// After first step: Place1 empty, Place2 has token (value 2), Place3 empty
-	if marking.HasTokens("Place1") == true {
+	if marking.HasTokens("p1") == true {
 		t.Error("Place1 should be empty after first step")
 	}
-	if !marking.HasTokens("Place2") {
+	if !marking.HasTokens("p2") {
 		t.Error("Place2 should have token after first step")
 	}
-	if marking.HasTokens("Place3") {
+	if marking.HasTokens("p3") {
 		t.Error("Place3 should be empty after first step")
 	}
 
@@ -393,13 +392,13 @@ func TestSimulationStep(t *testing.T) {
 	}
 
 	// Final state after two steps
-	if marking.HasTokens("Place1") || marking.HasTokens("Place2") {
+	if marking.HasTokens("p1") || marking.HasTokens("p2") {
 		t.Error("Place1 and Place2 should be empty after second step")
 	}
-	if !marking.HasTokens("Place3") {
+	if !marking.HasTokens("p3") {
 		t.Error("Place3 should have tokens after second step")
 	}
-	tokens := marking.GetTokens("Place3")
+	tokens := marking.GetTokens("p3")
 	if len(tokens) != 1 || tokens[0].Value != 3 {
 		t.Errorf("Expected token value 3 in Place3 after two steps, got %v", tokens)
 	}
@@ -428,7 +427,7 @@ func TestCPNCompletion(t *testing.T) {
 	// Initial marking
 	marking := models.NewMarking()
 	token := models.NewToken(42, 0)
-	marking.AddToken("Place1", token)
+	marking.AddToken("p1", token)
 
 	eng := engine.NewEngine()
 	defer eng.Close()

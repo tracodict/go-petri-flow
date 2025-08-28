@@ -106,7 +106,7 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 
 	// Execute transition action (side-effect expression) if present
 	if transition.HasAction() {
-		if _, err := e.evaluator.EvaluateArcExpression(transition.ActionExpression, context); err != nil {
+		if err := e.evaluator.EvaluateAction(transition.ActionExpression, context); err != nil {
 			return fmt.Errorf("failed to execute action for transition %s: %v", transition.Name, err)
 		}
 	}
@@ -124,6 +124,9 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 			}
 		}
 	}
+
+	// Increment step counter for each successful transition firing
+	marking.StepCounter++
 
 	return nil
 }
@@ -160,7 +163,7 @@ func (e *Engine) findBindingsRecursive(cpn *models.CPN, arcs []*models.Arc, arcI
 	}
 
 	// Get available tokens in the place
-	availableTokens := marking.GetAvailableTokensAtTime(place.Name, marking.GlobalClock)
+	availableTokens := marking.GetAvailableTokensAtTime(place.ID, marking.GlobalClock)
 	if len(availableTokens) == 0 {
 		return []TokenBinding{}, nil
 	}
@@ -275,7 +278,7 @@ func (e *Engine) processInputArc(cpn *models.CPN, arc *models.Arc, context *expr
 	}
 
 	// Remove the token from the place
-	token := marking.RemoveTokenByValue(place.Name, result)
+	token := marking.RemoveTokenByValue(place.ID, result)
 	if token == nil {
 		return fmt.Errorf("no token with value %v found in place %s", result, place.Name)
 	}
@@ -320,7 +323,7 @@ func (e *Engine) processOutputArc(cpn *models.CPN, arc *models.Arc, context *exp
 		return fmt.Errorf("invalid token for place %s: %v", place.Name, err)
 	}
 
-	marking.AddToken(place.Name, newToken)
+	marking.AddToken(place.ID, newToken)
 	return nil
 }
 
@@ -335,9 +338,9 @@ func (e *Engine) createEvaluationContext(binding TokenBinding, marking *models.M
 	}
 
 	// Add place tokens for complex expressions
-	for placeName := range marking.Places {
-		tokens := marking.GetTokens(placeName)
-		context.SetPlaceTokens(placeName, tokens)
+	for placeID := range marking.Places {
+		tokens := marking.GetTokens(placeID)
+		context.SetPlaceTokens(placeID, tokens)
 	}
 
 	return context

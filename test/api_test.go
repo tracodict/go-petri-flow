@@ -32,9 +32,7 @@ func TestAPILoadCPN(t *testing.T) {
 			{ID: "a1", SourceID: "p1", TargetID: "t1", Expression: "x", Direction: "IN"},
 			{ID: "a2", SourceID: "t1", TargetID: "p2", Expression: "x + 1", Direction: "OUT"},
 		},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Place1": {{Value: 5, Timestamp: 0}},
-		},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: 5, Timestamp: 0}}},
 	}
 
 	// Convert to JSON
@@ -159,9 +157,7 @@ func TestAPIGetMarking(t *testing.T) {
 			{ID: "a1", SourceID: "p1", TargetID: "t1", Expression: "x", Direction: "IN"},
 			{ID: "a2", SourceID: "t1", TargetID: "p2", Expression: "x", Direction: "OUT"},
 		},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Place1": {{Value: 42, Timestamp: 0}},
-		},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: 42, Timestamp: 0}}},
 	}
 
 	jsonData, _ := json.Marshal(cpnDef)
@@ -205,9 +201,16 @@ func TestAPIGetMarking(t *testing.T) {
 		t.Fatal("Expected places to be a map")
 	}
 
-	place1Tokens, ok := places["Place1"].([]interface{})
+	// Updated key format: Name(ID)
+	place1Key := "Place1(p1)"
+	place1TokensRaw, exists := places[place1Key]
+	if !exists {
+		place1TokensRaw = places["p1"]
+		place1Key = "p1"
+	}
+	place1Tokens, ok := place1TokensRaw.([]interface{})
 	if !ok {
-		t.Fatal("Expected Place1 tokens to be an array")
+		t.Fatalf("Expected %s tokens to be an array", place1Key)
 	}
 
 	if len(place1Tokens) != 1 {
@@ -239,9 +242,7 @@ func TestAPIGetTransitions(t *testing.T) {
 			{ID: "a3", SourceID: "p1", TargetID: "t2", Expression: "x", Direction: "IN"},
 			{ID: "a4", SourceID: "t2", TargetID: "p2", Expression: "x", Direction: "OUT"},
 		},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Place1": {{Value: 5, Timestamp: 0}},
-		},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: 5, Timestamp: 0}}},
 	}
 
 	jsonData, _ := json.Marshal(cpnDef)
@@ -331,9 +332,7 @@ func TestAPIFireTransition(t *testing.T) {
 			{ID: "a1", SourceID: "p1", TargetID: "t1", Expression: "x", Direction: "IN"},
 			{ID: "a2", SourceID: "t1", TargetID: "p2", Expression: "x + 10", Direction: "OUT"},
 		},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Place1": {{Value: 5, Timestamp: 0}},
-		},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: 5, Timestamp: 0}}},
 	}
 
 	jsonData, _ := json.Marshal(cpnDef)
@@ -386,16 +385,22 @@ func TestAPIFireTransition(t *testing.T) {
 	}
 
 	// Place1 should be empty
-	if place1Tokens, exists := places["Place1"]; exists {
+	if place1Tokens, exists := places["Place1(p1)"]; exists {
 		if tokens, ok := place1Tokens.([]interface{}); ok && len(tokens) > 0 {
 			t.Error("Expected Place1 to be empty after firing")
 		}
 	}
 
 	// Place2 should have a token with value 15 (5 + 10)
-	place2Tokens, ok := places["Place2"].([]interface{})
+	place2Key := "Place2(p2)"
+	place2TokensRaw, exist2 := places[place2Key]
+	if !exist2 {
+		place2TokensRaw = places["p2"]
+		place2Key = "p2"
+	}
+	place2Tokens, ok := place2TokensRaw.([]interface{})
 	if !ok {
-		t.Fatal("Expected Place2 tokens to be an array")
+		t.Fatalf("Expected %s tokens to be an array", place2Key)
 	}
 
 	if len(place2Tokens) != 1 {
@@ -442,10 +447,8 @@ func TestAPISimulateStep(t *testing.T) {
 			{ID: "a3", SourceID: "p2", TargetID: "t2", Expression: "x", Direction: "IN"},
 			{ID: "a4", SourceID: "t2", TargetID: "p3", Expression: "x", Direction: "OUT"},
 		},
-		InitialMarking: map[string][]models.TokenJSON{
-			"Place1": {{Value: 1, Timestamp: 0}},
-		},
-		EndPlaces: []string{"Place3"},
+		InitialMarking: map[string][]models.TokenJSON{"p1": {{Value: 1, Timestamp: 0}}},
+		EndPlaces:      []string{"Place3"},
 	}
 
 	jsonData, _ := json.Marshal(cpnDef)

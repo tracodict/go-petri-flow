@@ -30,7 +30,7 @@ type CPNDefinitionJSON struct {
 	Places         []PlaceJSON            `json:"places"`
 	Transitions    []TransitionJSON       `json:"transitions"`
 	Arcs           []ArcJSON              `json:"arcs"`
-	InitialMarking map[string][]TokenJSON `json:"initialMarking,omitempty"`
+	InitialMarking map[string][]TokenJSON `json:"initialMarking,omitempty"` // Keys: place IDs (preferred) or legacy place names
 	EndPlaces      []string               `json:"endPlaces,omitempty"`
 }
 
@@ -50,6 +50,8 @@ func (p *CPNParser) parseJsonSchemas(defs []JsonSchemaDef) error {
 		if d.Name == "" || d.Schema == nil {
 			return fmt.Errorf("invalid json schema definition (missing name or schema)")
 		}
+		// Preserve original for round-trip
+		p.colorSetParser.StoreOriginalJsonSchema(d.Name, d.Schema)
 		// Marshal schema object back to JSON bytes for compiler
 		data, err := json.Marshal(d.Schema)
 		if err != nil {
@@ -87,6 +89,8 @@ type TransitionJSON struct {
 	Kind             string    `json:"kind,omitempty"` // "Auto" or "Manual"
 	Position         *Position `json:"position,omitempty"`
 	ActionExpression string    `json:"actionExpression,omitempty"`
+	FormSchema       string    `json:"formSchema,omitempty"`
+	LayoutSchema     string    `json:"layoutSchema,omitempty"`
 }
 
 // ArcJSON represents the JSON structure for arcs
@@ -224,6 +228,14 @@ func (p *CPNParser) parseTransitions(cpn *CPN, transitionDefs []TransitionJSON) 
 			transition.SetAction(transitionDef.ActionExpression)
 		}
 
+		// Set form/layout schemas if provided (Manual transitions only, but we can store regardless)
+		if transitionDef.FormSchema != "" {
+			transition.FormSchema = transitionDef.FormSchema
+		}
+		if transitionDef.LayoutSchema != "" {
+			transition.LayoutSchema = transitionDef.LayoutSchema
+		}
+
 		if transitionDef.Position != nil {
 			transition.Position = &Position{X: transitionDef.Position.X, Y: transitionDef.Position.Y}
 		}
@@ -259,11 +271,16 @@ func (p *CPNParser) parseArcs(cpn *CPN, arcDefs []ArcJSON) error {
 
 // parseInitialMarking parses initial marking definitions
 func (p *CPNParser) parseInitialMarking(cpn *CPN, initialMarkingDef map[string][]TokenJSON) error {
-	for placeName, tokenDefs := range initialMarkingDef {
-		// Find the place to get its color set
-		place := cpn.GetPlaceByName(placeName)
+	for key, tokenDefs := range initialMarkingDef {
+		// First try key as place ID
+		place := cpn.GetPlace(key)
+		legacyName := false
+		if place == nil { // fallback to legacy name
+			place = cpn.GetPlaceByName(key)
+			legacyName = place != nil
+		}
 		if place == nil {
-			return fmt.Errorf("unknown place '%s' in initial marking", placeName)
+			return fmt.Errorf("unknown place identifier '%s' in initial marking", key)
 		}
 
 		// Parse tokens (expanding Count shorthand)
@@ -276,7 +293,7 @@ func (p *CPNParser) parseInitialMarking(cpn *CPN, initialMarkingDef map[string][
 			// Validate once
 			if !place.ColorSet.IsMember(tokenDef.Value) {
 				return fmt.Errorf("token value %v is not valid for color set %s in place %s",
-					tokenDef.Value, place.ColorSet.Name(), placeName)
+					tokenDef.Value, place.ColorSet.Name(), place.Name)
 			}
 			for i := 0; i < count; i++ {
 				token := NewToken(tokenDef.Value, tokenDef.Timestamp)
@@ -284,7 +301,9 @@ func (p *CPNParser) parseInitialMarking(cpn *CPN, initialMarkingDef map[string][
 			}
 		}
 
-		cpn.SetInitialMarking(placeName, tokens)
+		// Always store by place ID internally
+		cpn.SetInitialMarking(place.ID, tokens)
+		_ = legacyName // placeholder; potential warning hook in future
 	}
 	return nil
 }
@@ -295,11 +314,19 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 		ID:             cpn.ID,
 		Name:           cpn.Name,
 		Description:    cpn.Description,
+		ColorSets:      []string{}, // reconstruct color set declarations (best-effort)
+		JsonSchemas:    []JsonSchemaDef{},
 		Places:         make([]PlaceJSON, len(cpn.Places)),
 		Transitions:    make([]TransitionJSON, len(cpn.Transitions)),
 		Arcs:           make([]ArcJSON, len(cpn.Arcs)),
 		InitialMarking: make(map[string][]TokenJSON),
 		EndPlaces:      cpn.EndPlaces,
+	}
+
+	// Use preserved original definitions if available
+	if p.colorSetParser != nil {
+		cpnDef.ColorSets = p.colorSetParser.GetOriginalColorSetDefinitions()
+		cpnDef.JsonSchemas = p.colorSetParser.GetOriginalJsonSchemas()
 	}
 
 	// Convert places
@@ -315,13 +342,16 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 	// Convert transitions
 	for i, transition := range cpn.Transitions {
 		cpnDef.Transitions[i] = TransitionJSON{
-			ID:              transition.ID,
-			Name:            transition.Name,
-			GuardExpression: transition.GuardExpression,
-			Variables:       transition.Variables,
-			TransitionDelay: transition.TransitionDelay,
-			Kind:            string(transition.Kind),
-			Position:        transition.Position,
+			ID:               transition.ID,
+			Name:             transition.Name,
+			GuardExpression:  transition.GuardExpression,
+			Variables:        transition.Variables,
+			TransitionDelay:  transition.TransitionDelay,
+			Kind:             string(transition.Kind),
+			Position:         transition.Position,
+			ActionExpression: transition.ActionExpression,
+			FormSchema:       transition.FormSchema,
+			LayoutSchema:     transition.LayoutSchema,
 		}
 	}
 
@@ -336,16 +366,13 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 		}
 	}
 
-	// Convert initial marking
-	for placeName, tokens := range cpn.InitialMarking {
+	// Convert initial marking (ids as keys)
+	for placeID, tokens := range cpn.InitialMarking {
 		tokenDefs := make([]TokenJSON, len(tokens))
 		for i, token := range tokens {
-			tokenDefs[i] = TokenJSON{
-				Value:     token.Value,
-				Timestamp: token.Timestamp,
-			}
+			tokenDefs[i] = TokenJSON{Value: token.Value, Timestamp: token.Timestamp}
 		}
-		cpnDef.InitialMarking[placeName] = tokenDefs
+		cpnDef.InitialMarking[placeID] = tokenDefs
 	}
 
 	return json.MarshalIndent(cpnDef, "", "  ")

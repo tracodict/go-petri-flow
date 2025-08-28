@@ -92,15 +92,9 @@
     }
   ],
   "initialMarking": {
-    "Requests": [
-      {
-        "value": 150,
-        "timestamp": 0
-      },
-      {
-        "value": 50,
-        "timestamp": 0
-      }
+    "p1": [
+      { "value": 150, "timestamp": 0 },
+      { "value": 50, "timestamp": 0 }
     ]
   },
   "endPlaces": ["Approved", "Rejected"]

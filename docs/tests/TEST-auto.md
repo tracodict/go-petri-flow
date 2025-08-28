@@ -21,18 +21,20 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"p_out","name":"Out","colorSet":"INT"}
 		],
 		"transitions": [
-			{"id":"t_proc","name":"Proc","kind":"Auto","actionExpression":"tmp = x * 10"}
+			{"id":"t_proc","name":"Proc","kind":"Auto","actionExpression":"tmp = x * 10", "guardExpression": "true"}
 		],
 		"arcs": [
 			{"id":"a_in","sourceId":"p_in","targetId":"t_proc","expression":"x","direction":"IN"},
 			{"id":"a_out","sourceId":"t_proc","targetId":"p_out","expression":"tmp + 1","direction":"OUT"}
 		],
-		"initialMarking": {"In": [ {"value":3, "timestamp":0} ]}
+		"initialMarking": {"p_in": [ {"value":3, "timestamp":0} ]}
 	}'
 ```
 
 Fire automatically via step (layered) or multi-step:
 ```sh
+curl -X GET "{$FLOW_SVC}/api/cpn/get?id=auto-act-1"
+curl -X GET "{$FLOW_SVC}/api/transitions/list?id=auto-act-1"
 curl -X POST "${FLOW_SVC}/api/simulation/step?id=auto-act-1"
 curl -X GET  "${FLOW_SVC}/api/marking/get?id=auto-act-1" # Expect Out token value 31
 ```
@@ -58,7 +60,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in","sourceId":"p_in","targetId":"t_wait","expression":"x","direction":"IN"},
 			{"id":"a_out","sourceId":"t_wait","targetId":"p_out","expression":"tmp","direction":"OUT"}
 		],
-		"initialMarking": {"In": [ {"value":5, "timestamp":0} ]}
+		"initialMarking": {"p_in": [ {"value":5, "timestamp":0} ]}
 	}'
 curl -X POST "${FLOW_SVC}/api/simulation/step?id=auto-act-2"
 curl -X GET  "${FLOW_SVC}/api/marking/get?id=auto-act-2" # Expect Out value = (5*2)+4 = 14
@@ -86,7 +88,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in2","sourceId":"p_b","targetId":"t_add","expression":"b","direction":"IN"},
 			{"id":"a_out","sourceId":"t_add","targetId":"p_out","expression":"sum","direction":"OUT"}
 		],
-		"initialMarking": {"A": [ {"value":2, "timestamp":0} ], "B": [ {"value":7, "timestamp":0} ]}
+		"initialMarking": {"p_a": [ {"value":2, "timestamp":0} ], "B": [ {"value":7, "timestamp":0} ]}
 	}'
 curl -X POST "${FLOW_SVC}/api/simulation/step?id=auto-act-3"
 curl -X GET  "${FLOW_SVC}/api/marking/get?id=auto-act-3" # Expect Out value 9

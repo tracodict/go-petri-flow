@@ -5,14 +5,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yuin/gopher-lua"
 	"go-petri-flow/internal/models"
+
+	lua "github.com/yuin/gopher-lua"
 )
 
 // EvaluationContext holds the context for expression evaluation
 type EvaluationContext struct {
-	TokenBindings map[string]*models.Token // Variable name -> Token
-	GlobalClock   int                      // Current global clock
+	TokenBindings map[string]*models.Token   // Variable name -> Token
+	GlobalClock   int                        // Current global clock
 	PlaceTokens   map[string][]*models.Token // Place name -> Available tokens
 	ColorSets     map[string]models.ColorSet // Color set registry
 }
@@ -35,14 +36,14 @@ type Evaluator struct {
 // NewEvaluator creates a new expression evaluator
 func NewEvaluator() *Evaluator {
 	L := lua.NewState()
-	
+
 	evaluator := &Evaluator{
 		luaState: L,
 	}
-	
+
 	// Register CPN-specific functions
 	evaluator.registerCPNFunctions()
-	
+
 	return evaluator
 }
 
@@ -58,24 +59,24 @@ func (e *Evaluator) EvaluateGuard(expression string, context *EvaluationContext)
 	if expression == "" {
 		return true, nil // Empty guard is always true
 	}
-	
+
 	// Set up the Lua environment with context
 	if err := e.setupLuaContext(context); err != nil {
 		return false, fmt.Errorf("failed to setup Lua context: %v", err)
 	}
-	
+
 	// Evaluate the expression
 	result, err := e.evaluateLuaExpression(expression)
 	if err != nil {
 		return false, fmt.Errorf("failed to evaluate guard expression '%s': %v", expression, err)
 	}
-	
+
 	// Convert result to boolean
 	boolResult, ok := result.(bool)
 	if !ok {
 		return false, fmt.Errorf("guard expression '%s' did not return a boolean value, got %T", expression, result)
 	}
-	
+
 	return boolResult, nil
 }
 
@@ -84,28 +85,52 @@ func (e *Evaluator) EvaluateArcExpression(expression string, context *Evaluation
 	if expression == "" {
 		return nil, fmt.Errorf("arc expression cannot be empty")
 	}
-	
+
 	// Set up the Lua environment with context
 	if err := e.setupLuaContext(context); err != nil {
 		return nil, fmt.Errorf("failed to setup Lua context: %v", err)
 	}
-	
-	// Evaluate the expression
+
 	result, err := e.evaluateLuaExpression(expression)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate arc expression '%s': %v", expression, err)
 	}
-	
+
 	return result, nil
+}
+
+// EvaluateAction executes an action expression that may contain statements (assignments, loops, etc.).
+// It doesn't enforce a return value. Any final expression result is ignored.
+func (e *Evaluator) EvaluateAction(action string, context *EvaluationContext) error {
+	if action == "" {
+		return nil
+	}
+	if err := e.setupLuaContext(context); err != nil {
+		return fmt.Errorf("failed to setup Lua context: %v", err)
+	}
+	// For actions we allow full Lua chunks. Ensure it compiles by leaving as-is.
+	// Provide implicit do-end wrapper so single line assignment still works uniformly.
+	chunk := action
+	if !strings.HasPrefix(strings.TrimSpace(action), "do") && strings.Contains(action, "=") {
+		// wrap only if it's a plain assignment without control keywords or return
+		lowered := strings.ToLower(action)
+		if !strings.Contains(lowered, "return") && !strings.Contains(lowered, "if ") && !strings.Contains(lowered, "for ") && !strings.Contains(lowered, "while ") {
+			chunk = "do " + action + " end"
+		}
+	}
+	if err := e.luaState.DoString(chunk); err != nil {
+		return fmt.Errorf("Lua action execution error: %v", err)
+	}
+	return nil
 }
 
 // setupLuaContext sets up the Lua environment with the evaluation context
 func (e *Evaluator) setupLuaContext(context *EvaluationContext) error {
 	L := e.luaState
-	
+
 	// Set global clock
 	L.SetGlobal("global_clock", lua.LNumber(context.GlobalClock))
-	
+
 	// Set token bindings as variables
 	for varName, token := range context.TokenBindings {
 		luaValue, err := e.goValueToLua(token.Value)
@@ -113,54 +138,54 @@ func (e *Evaluator) setupLuaContext(context *EvaluationContext) error {
 			return fmt.Errorf("failed to convert token value for variable %s: %v", varName, err)
 		}
 		L.SetGlobal(varName, luaValue)
-		
+
 		// Also set timestamp for the variable
 		L.SetGlobal(varName+"_timestamp", lua.LNumber(token.Timestamp))
 	}
-	
+
 	// Set place tokens (for more complex expressions that might need to access place contents)
 	placeTable := L.NewTable()
 	for placeName, tokens := range context.PlaceTokens {
 		tokenTable := L.NewTable()
 		for i, token := range tokens {
 			tokenLuaTable := L.NewTable()
-			
+
 			valueLua, err := e.goValueToLua(token.Value)
 			if err != nil {
 				return fmt.Errorf("failed to convert token value for place %s: %v", placeName, err)
 			}
-			
+
 			tokenLuaTable.RawSetString("value", valueLua)
 			tokenLuaTable.RawSetString("timestamp", lua.LNumber(token.Timestamp))
-			
+
 			tokenTable.RawSetInt(i+1, tokenLuaTable) // Lua arrays are 1-indexed
 		}
 		placeTable.RawSetString(placeName, tokenTable)
 	}
 	L.SetGlobal("places", placeTable)
-	
+
 	return nil
 }
 
 // evaluateLuaExpression evaluates a Lua expression and returns the result
 func (e *Evaluator) evaluateLuaExpression(expression string) (interface{}, error) {
 	L := e.luaState
-	
+
 	// Wrap the expression in a return statement if it doesn't already have one
 	luaCode := expression
 	if !strings.Contains(strings.ToLower(expression), "return") {
 		luaCode = "return " + expression
 	}
-	
+
 	// Execute the Lua code
 	if err := L.DoString(luaCode); err != nil {
 		return nil, fmt.Errorf("Lua execution error: %v", err)
 	}
-	
+
 	// Get the result from the stack
 	result := L.Get(-1)
 	L.Pop(1)
-	
+
 	// Convert Lua value back to Go value
 	return e.luaValueToGo(result), nil
 }
@@ -245,13 +270,13 @@ func (e *Evaluator) isLuaArray(table *lua.LTable) bool {
 	if length == 0 {
 		return false
 	}
-	
+
 	for i := 1; i <= length; i++ {
 		if table.RawGetInt(i) == lua.LNil {
 			return false
 		}
 	}
-	
+
 	// Check if there are any non-integer keys
 	hasNonIntegerKeys := false
 	table.ForEach(func(key, value lua.LValue) {
@@ -264,7 +289,7 @@ func (e *Evaluator) isLuaArray(table *lua.LTable) bool {
 			}
 		}
 	})
-	
+
 	return !hasNonIntegerKeys
 }
 
@@ -272,37 +297,37 @@ func (e *Evaluator) isLuaArray(table *lua.LTable) bool {
 func (e *Evaluator) luaTableToSlice(table *lua.LTable) []interface{} {
 	length := table.Len()
 	result := make([]interface{}, length)
-	
+
 	for i := 1; i <= length; i++ {
 		result[i-1] = e.luaValueToGo(table.RawGetInt(i))
 	}
-	
+
 	return result
 }
 
 // luaTableToMap converts a Lua table to a Go map
 func (e *Evaluator) luaTableToMap(table *lua.LTable) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	table.ForEach(func(key, value lua.LValue) {
 		keyStr := e.luaValueToGo(key)
 		valueGo := e.luaValueToGo(value)
 		result[fmt.Sprintf("%v", keyStr)] = valueGo
 	})
-	
+
 	return result
 }
 
 // registerCPNFunctions registers CPN-specific functions in the Lua environment
 func (e *Evaluator) registerCPNFunctions() {
 	L := e.luaState
-	
+
 	// Register utility functions
 	L.SetGlobal("print", L.NewFunction(e.luaPrint))
 	L.SetGlobal("type", L.NewFunction(e.luaType))
 	L.SetGlobal("tostring", L.NewFunction(e.luaToString))
 	L.SetGlobal("tonumber", L.NewFunction(e.luaToNumber))
-	
+
 	// Register CPN-specific functions
 	L.SetGlobal("token", L.NewFunction(e.luaCreateToken))
 	L.SetGlobal("tuple", L.NewFunction(e.luaCreateTuple))
@@ -361,11 +386,11 @@ func (e *Evaluator) luaCreateTuple(L *lua.LState) int {
 	// Create a tuple from arguments
 	args := L.GetTop()
 	table := L.NewTable()
-	
+
 	for i := 1; i <= args; i++ {
 		table.RawSetInt(i, L.Get(i))
 	}
-	
+
 	L.Push(table)
 	return 1
 }
@@ -374,12 +399,12 @@ func (e *Evaluator) luaDelay(L *lua.LState) int {
 	// Create a delayed token (for arc expressions with @+delay syntax)
 	value := L.Get(1)
 	delay := L.Get(2)
-	
+
 	// For now, just return a table with value and delay
 	table := L.NewTable()
 	table.RawSetString("value", value)
 	table.RawSetString("delay", delay)
-	
+
 	L.Push(table)
 	return 1
 }
@@ -424,12 +449,12 @@ func (ctx *EvaluationContext) Clone() *EvaluationContext {
 		PlaceTokens:   make(map[string][]*models.Token),
 		ColorSets:     make(map[string]models.ColorSet),
 	}
-	
+
 	// Copy token bindings
 	for varName, token := range ctx.TokenBindings {
 		clone.TokenBindings[varName] = token.Clone()
 	}
-	
+
 	// Copy place tokens
 	for placeName, tokens := range ctx.PlaceTokens {
 		clonedTokens := make([]*models.Token, len(tokens))
@@ -438,12 +463,11 @@ func (ctx *EvaluationContext) Clone() *EvaluationContext {
 		}
 		clone.PlaceTokens[placeName] = clonedTokens
 	}
-	
+
 	// Copy color sets (shallow copy is fine as they're immutable)
 	for name, cs := range ctx.ColorSets {
 		clone.ColorSets[name] = cs
 	}
-	
+
 	return clone
 }
-

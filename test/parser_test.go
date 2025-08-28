@@ -190,7 +190,7 @@ func TestCPNParser(t *testing.T) {
 	if len(cpn.InitialMarking) != 1 {
 		t.Errorf("Expected 1 place in initial marking, got %d", len(cpn.InitialMarking))
 	}
-	tokens, exists := cpn.InitialMarking["Place1"]
+	tokens, exists := cpn.InitialMarking["p1"]
 	if !exists {
 		t.Error("Place1 should have initial tokens")
 	} else {
@@ -209,11 +209,11 @@ func TestCPNParser(t *testing.T) {
 
 	// Test creating initial marking
 	marking := cpn.CreateInitialMarking()
-	if !marking.HasTokens("Place1") {
+	if !marking.HasTokens("p1") {
 		t.Error("Initial marking should have tokens in Place1")
 	}
-	if marking.CountTokens("Place1") != 1 {
-		t.Errorf("Expected 1 token in Place1, got %d", marking.CountTokens("Place1"))
+	if marking.CountTokens("p1") != 1 {
+		t.Errorf("Expected 1 token in Place1, got %d", marking.CountTokens("p1"))
 	}
 }
 
@@ -246,7 +246,7 @@ func TestCPNToJSON(t *testing.T) {
 
 	// Add initial marking
 	token := models.NewToken(5, 0)
-	cpn.AddInitialToken("Place1", token)
+	cpn.AddInitialToken("p1", token)
 
 	// Set end places
 	cpn.SetEndPlaces([]string{"Place2"})

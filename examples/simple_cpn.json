@@ -69,11 +69,8 @@
     }
   ],
   "initialMarking": {
-    "Start": [
-      {
-        "value": 3,
-        "timestamp": 0
-      }
+    "p1": [
+      { "value": 3, "timestamp": 0 }
     ]
   },
   "endPlaces": ["End"]

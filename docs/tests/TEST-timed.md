@@ -25,7 +25,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_in","sourceId":"p_in","targetId":"t_delay","expression":"x","direction":"IN"},
 			{"id":"a_out","sourceId":"t_delay","targetId":"p_out","expression":"x","direction":"OUT"}
 		],
-		"initialMarking": {"In": [{"value": 42, "timestamp": 0}]}
+		"initialMarking": {"p_in": [{"value": 42, "timestamp": 0}]}
 	}'
 ```
 
@@ -40,6 +40,7 @@ curl -X GET "${FLOW_SVC}/api/marking/get?id=timed-cpn-1"
 curl -X POST ${FLOW_SVC}/api/transitions/fire \
 	-H 'Content-Type: application/json' \
 	-d '{"cpnId":"timed-cpn-1","transitionId":"t_delay","bindingIndex":0}'
+curl -X GET "{$FLOW_SVC}/api/cpn/get?id=timed-cpn-1"
 ```
 Expect response globalClock increased to 5 and token moved to Out.
 
@@ -64,7 +65,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a1","sourceId":"p1","targetId":"t1","expression":"x","direction":"IN"},
 			{"id":"a2","sourceId":"t1","targetId":"p2","expression":"return { value = x, delay = 7 }","direction":"OUT"}
 		],
-		"initialMarking": {"P1": [{"value": 1, "timestamp": 0}]}
+		"initialMarking": {"p1": [{"value": 1, "timestamp": 0}]}
 	}'
 ```
 
@@ -100,11 +101,13 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a3","sourceId":"p2","targetId":"t2","expression":"x","direction":"IN"},
 			{"id":"a4","sourceId":"t2","targetId":"p3","expression":"x+1","direction":"OUT"}
 		],
-		"initialMarking": {"P1": [{"value":1,"timestamp":0}]}
+		"initialMarking": {"p1": [{"value":1,"timestamp":0}]}
 	}'
 ```
 Run a first simulation step (layered semantics: only T1 fires producing token in P2 at time 3):
 ```sh
+curl -X GET "{$FLOW_SVC}/api/cpn/get?id=timed-cpn-3"
+curl -X GET "{$FLOW_SVC}/api/transitions/list?id=timed-cpn-3"
 curl -X POST "${FLOW_SVC}/api/simulation/step?id=timed-cpn-3"
 curl -X GET "${FLOW_SVC}/api/marking/get?id=timed-cpn-3" # Expect token in P2 timestamp 3, none in P3
 ```
@@ -126,26 +129,7 @@ curl -X GET "${FLOW_SVC}/api/cpn/validate?id=timed-cpn-3"
 
 ### 8. Manual Transition With Delay (Not Auto-Fired)
 ```sh
-curl -X POST ${FLOW_SVC}/api/cpn/load \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"id": "timed-cpn-4",
-		"name": "Manual Delay",
-		"description": "Manual transition with delay",
-		"colorSets": ["colset INT = int;"],
-		"places": [
-			{"id":"p1","name":"P1","colorSet":"INT"},
-			{"id":"p2","name":"P2","colorSet":"INT"}
-		],
-		"transitions": [
-			{"id":"t_manual","name":"TManual","kind":"Manual","transitionDelay":4}
-		],
-		"arcs": [
-			{"id":"a1","sourceId":"p1","targetId":"t_manual","expression":"x","direction":"IN"},
-			{"id":"a2","sourceId":"t_manual","targetId":"p2","expression":"x","direction":"OUT"}
-		],
-		"initialMarking": {"P1": [{"value":7,"timestamp":0}]}
-	}'
+a
 ```
 Check auto step (should not fire manual):
 ```sh
@@ -184,7 +168,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a3","sourceId":"p_mid","targetId":"t_cons","expression":"x","direction":"IN"},
 			{"id":"a4","sourceId":"t_cons","targetId":"p_sink","expression":"x","direction":"OUT"}
 		],
-		"initialMarking": {"Src": [{"value":5,"timestamp":0}]}
+		"initialMarking": {"p_src": [{"value":5,"timestamp":0}]}
 	}'
 ```
 Produce future token:
@@ -229,7 +213,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a3","sourceId":"p_mid","targetId":"t_consume","expression":"x","direction":"IN"},
 			{"id":"a4","sourceId":"t_consume","targetId":"p_out","expression":"x","direction":"OUT"}
 		],
-		"initialMarking": {"Src": [{"value":5,"timestamp":0}]}
+		"initialMarking": {"p_src": [{"value":5,"timestamp":0}]}
 	}'
 ```
 Fire producer and inspect state (token in Mid has future timestamp 4):
@@ -265,7 +249,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"as1","sourceId":"ps","targetId":"t_delay_str","expression":"s","direction":"IN"},
 			{"id":"as2","sourceId":"t_delay_str","targetId":"pd","expression":"s .. \"_done\"","direction":"OUT"}
 		],
-		"initialMarking": {"Src": [{"value":"job","timestamp":0}]}
+		"initialMarking": {"p_src": [{"value":"job","timestamp":0}]}
 	}'
 ```
 Fire delayed transition and inspect new timestamp (expected global clock 3, token timestamp >=3):
