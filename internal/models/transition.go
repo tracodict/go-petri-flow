@@ -6,8 +6,10 @@ import "fmt"
 type TransitionKind string
 
 const (
-	TransitionKindAuto   TransitionKind = "Auto"
-	TransitionKindManual TransitionKind = "Manual"
+	TransitionKindAuto    TransitionKind = "Auto"
+	TransitionKindManual  TransitionKind = "Manual"
+	TransitionKindMessage TransitionKind = "Message"
+	TransitionKindLLM     TransitionKind = "LLM"
 )
 
 // Transition represents a transition in the CPN
@@ -84,6 +86,14 @@ func (t *Transition) IsAuto() bool {
 // IsManual returns true if the transition is manual
 func (t *Transition) IsManual() bool {
 	return t.Kind == TransitionKindManual
+}
+
+func (t *Transition) IsMessage() bool {
+	return t.Kind == TransitionKindMessage
+}
+
+func (t *Transition) IsLLM() bool {
+	return t.Kind == TransitionKindLLM
 }
 
 // HasGuard returns true if the transition has a guard expression

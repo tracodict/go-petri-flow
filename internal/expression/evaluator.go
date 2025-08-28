@@ -57,9 +57,13 @@ func (e *Evaluator) Close() {
 // GetGlobalValue returns the current Lua global value for a variable name converted to Go.
 // Returns nil if the variable is not defined.
 func (e *Evaluator) GetGlobalValue(varName string) interface{} {
-	if e.luaState == nil { return nil }
+	if e.luaState == nil {
+		return nil
+	}
 	lv := e.luaState.GetGlobal(varName)
-	if lv == lua.LNil { return nil }
+	if lv == lua.LNil {
+		return nil
+	}
 	return e.luaValueToGo(lv)
 }
 
@@ -180,23 +184,57 @@ func (e *Evaluator) setupLuaContext(context *EvaluationContext) error {
 func (e *Evaluator) evaluateLuaExpression(expression string) (interface{}, error) {
 	L := e.luaState
 
-	// Wrap the expression in a return statement if it doesn't already have one
-	luaCode := expression
-	if !strings.Contains(strings.ToLower(expression), "return") {
-		luaCode = "return " + expression
+	trimmed := strings.TrimSpace(expression)
+	lower := strings.ToLower(trimmed)
+	useReturn := true
+	useResultVar := false
+	resultVar := "__gpf_arc_result"
+	luaCode := trimmed
+
+	// Heuristic: if multi-statement (contains 'local ' or ';' or newline) and no explicit return, capture last expr.
+	if !strings.Contains(lower, "return") && (strings.Contains(trimmed, "local ") || strings.Contains(trimmed, ";") || strings.Contains(trimmed, "\n")) {
+		// Split by semicolons to find last expression part
+		parts := strings.Split(trimmed, ";")
+		last := strings.TrimSpace(parts[len(parts)-1])
+		prefix := strings.Join(parts[:len(parts)-1], ";")
+		if last == "" { // handle trailing semicolon: try previous non-empty
+			for i := len(parts) - 2; i >= 0; i-- {
+				candidate := strings.TrimSpace(parts[i])
+				if candidate != "" { last = candidate; parts = parts[:i]; break }
+			}
+			prefix = strings.Join(parts, ";")
+		}
+		assignment := fmt.Sprintf("%s = (%s)", resultVar, last)
+		if strings.TrimSpace(prefix) != "" {
+			luaCode = prefix + "; " + assignment
+		} else {
+			luaCode = assignment
+		}
+		useReturn = false
+		useResultVar = true
 	}
 
-	// Execute the Lua code
+	if useReturn && !strings.Contains(lower, "return") {
+		luaCode = "return " + trimmed
+	}
+
 	if err := L.DoString(luaCode); err != nil {
 		return nil, fmt.Errorf("Lua execution error: %v", err)
 	}
 
-	// Get the result from the stack
-	result := L.Get(-1)
-	L.Pop(1)
+	var result interface{}
+	if useResultVar {
+		lv := L.GetGlobal(resultVar)
+		result = e.luaValueToGo(lv)
+		// Optionally clear the global to avoid leaking (not strictly necessary)
+		L.SetGlobal(resultVar, lua.LNil)
+	} else {
+		lv := L.Get(-1)
+		result = e.luaValueToGo(lv)
+		L.Pop(1)
+	}
 
-	// Convert Lua value back to Go value
-	return e.luaValueToGo(result), nil
+	return result, nil
 }
 
 // goValueToLua converts a Go value to a Lua value

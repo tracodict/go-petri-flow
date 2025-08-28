@@ -1,3 +1,19 @@
+## Is the followoing convention aligned to CPN Tools's?
+
+Differences vs CPN Tools:
+
+CPN Tools (Standard ML) re-evaluates inscriptions in a pure functional environment per binding; no mutable global variable state persists across separate transition firings (aside from user‑defined global declarations). Your Lua engine keeps one long‑lived state, so globals (e.g. g) persist across firings and even other nets unless reset.
+In CPN Tools, “variables” on arc inscriptions are binding variables only; you can’t assign to them to change later arc results—state must flow via places/tokens. In your engine you can mutate a bound table (e.g. item.status) and then propagate it to outputs.
+Local vs global: In CPN Tools you’d use let/in or local declarations; scope always ends with the expression—no risk of leaking into later firings. In your Lua setup, forgetting local makes a persistent global that later firings can read, which is a semantic departure.
+Guards in CPN Tools are pure (no side effects); your guard code could (in principle) mutate globals because it’s just Lua, affecting later evaluations.
+If you want closer alignment:
+
+Recreate/clear the Lua state (or a fresh environment table) per transition firing (and per arc/guard evaluation).
+Disallow or ignore side effects in guards/output inscriptions (e.g. run them in a sandbox and discard mutated globals).
+Only allow cross‑firing state via tokens/marking (or explicit declared functions), not lingering globals.
+Treat actionExpression mutations by copying modified bound values directly into produced tokens, not via globals.
+Conclusion: Current “global persists” convention is a convenience but not faithful to CPN Tools semantics; document it clearly or adjust as above if strict alignment is desired.
+
 ## Variable Scope in Arc & Transition Action Expressions
 
 This guide shows how Lua variable scope works inside arc expressions and `actionExpression` blocks for transitions.
@@ -32,7 +48,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 		"transitions": [ {"id":"t1","name":"T1","kind":"Auto"} ],
 		"arcs": [
 			{"id":"a_in","sourceId":"p_in","targetId":"t1","expression":"x","direction":"IN"},
-			{"id":"a_out","sourceId":"t1","targetId":"p_out","expression":"local tmp = x * 5; tmp + 2","direction":"OUT"}
+			{"id":"a_out","sourceId":"t1","targetId":"p_out","expression":"local tmp = x * 5; return tmp + 2","direction":"OUT"}
 		],
 		"initialMarking": {"In": [ {"value":4, "timestamp":0} ]}
 	}'
@@ -57,7 +73,7 @@ curl -X POST ${FLOW_SVC}/api/cpn/load \
 		"transitions": [ {"id":"t_incr","name":"Incr","kind":"Auto"} ],
 		"arcs": [
 			{"id":"a_in","sourceId":"p_src","targetId":"t_incr","expression":"x","direction":"IN"},
-			{"id":"a_out","sourceId":"t_incr","targetId":"p_mid","expression":"g = (g or 0) + x; g","direction":"OUT"}
+			{"id":"a_out","sourceId":"t_incr","targetId":"p_mid","expression":"g = (g or 0) + x; return g","direction":"OUT"}
 		],
 		"initialMarking": {"Src": [ {"value":3, "timestamp":0}, {"value":4, "timestamp":0} ]}
 	}'

@@ -111,8 +111,12 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 		}
 		// After action, pull back Lua globals for each bound variable
 		for varName, tk := range context.TokenBindings {
-			if tk == nil { continue }
-			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil { tk.Value = goVal }
+			if tk == nil {
+				continue
+			}
+			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil {
+				tk.Value = goVal
+			}
 		}
 	}
 
@@ -185,8 +189,12 @@ func (e *Engine) FireTransitionWithData(cpn *models.CPN, transition *models.Tran
 			return fmt.Errorf("failed to execute action for transition %s: %v", transition.Name, err)
 		}
 		for varName, tk := range context.TokenBindings {
-			if tk == nil { continue }
-			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil { tk.Value = goVal }
+			if tk == nil {
+				continue
+			}
+			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil {
+				tk.Value = goVal
+			}
 		}
 	}
 

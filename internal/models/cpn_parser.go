@@ -218,6 +218,10 @@ func (p *CPNParser) parseTransitions(cpn *CPN, transitionDefs []TransitionJSON) 
 				transition.SetKind(TransitionKindAuto)
 			case "Manual":
 				transition.SetKind(TransitionKindManual)
+			case "Message":
+				transition.SetKind(TransitionKindMessage)
+			case "LLM":
+				transition.SetKind(TransitionKindLLM)
 			default:
 				return fmt.Errorf("unknown transition kind '%s' for transition '%s'", transitionDef.Kind, transitionDef.Name)
 			}
