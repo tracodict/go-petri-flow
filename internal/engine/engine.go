@@ -104,10 +104,15 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 		marking.AdvanceGlobalClock(marking.GlobalClock + transition.TransitionDelay)
 	}
 
-	// Execute transition action (side-effect expression) if present
+	// Execute transition action (side-effect expression) if present and capture mutated variables
 	if transition.HasAction() {
 		if err := e.evaluator.EvaluateAction(transition.ActionExpression, context); err != nil {
 			return fmt.Errorf("failed to execute action for transition %s: %v", transition.Name, err)
+		}
+		// After action, pull back Lua globals for each bound variable
+		for varName, tk := range context.TokenBindings {
+			if tk == nil { continue }
+			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil { tk.Value = goVal }
 		}
 	}
 
@@ -128,6 +133,77 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 	// Increment step counter for each successful transition firing
 	marking.StepCounter++
 
+	return nil
+}
+
+// FireTransitionWithData fires a transition injecting external formData variables into the evaluation context
+func (e *Engine) FireTransitionWithData(cpn *models.CPN, transition *models.Transition, binding TokenBinding, marking *models.Marking, formData map[string]interface{}) error {
+	// Basic path if no extra data
+	if len(formData) == 0 {
+		return e.FireTransition(cpn, transition, binding, marking)
+	}
+
+	// Verify enabled
+	enabled, _, err := e.IsEnabled(cpn, transition, marking)
+	if err != nil {
+		return fmt.Errorf("failed to check if transition is enabled: %v", err)
+	}
+	if !enabled {
+		return fmt.Errorf("transition %s is not enabled", transition.Name)
+	}
+
+	// Create evaluation context with existing binding
+	context := e.createEvaluationContext(binding, marking)
+
+	// Inject form data as variable bindings
+	if len(formData) > 0 {
+		for k, v := range formData {
+			context.SetValue(k, v)
+		}
+	}
+
+	// Process input arcs
+	inputArcs := cpn.GetInputArcs(transition.ID)
+	for _, arc := range inputArcs {
+		count := arc.Multiplicity
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count; i++ {
+			if err := e.processInputArc(cpn, arc, context, marking); err != nil {
+				return fmt.Errorf("failed to process input arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+			}
+		}
+	}
+
+	if transition.TransitionDelay > 0 {
+		marking.AdvanceGlobalClock(marking.GlobalClock + transition.TransitionDelay)
+	}
+
+	if transition.HasAction() {
+		if err := e.evaluator.EvaluateAction(transition.ActionExpression, context); err != nil {
+			return fmt.Errorf("failed to execute action for transition %s: %v", transition.Name, err)
+		}
+		for varName, tk := range context.TokenBindings {
+			if tk == nil { continue }
+			if goVal := e.evaluator.GetGlobalValue(varName); goVal != nil { tk.Value = goVal }
+		}
+	}
+
+	outputArcs := cpn.GetOutputArcs(transition.ID)
+	for _, arc := range outputArcs {
+		count := arc.Multiplicity
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count; i++ {
+			if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
+				return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+			}
+		}
+	}
+
+	marking.StepCounter++
 	return nil
 }
 

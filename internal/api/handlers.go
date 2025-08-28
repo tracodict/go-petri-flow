@@ -406,9 +406,10 @@ func (s *Server) FireTransition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		CPNID        string `json:"cpnId"`
-		TransitionID string `json:"transitionId"`
-		BindingIndex int    `json:"bindingIndex,omitempty"`
+		CPNID        string                 `json:"cpnId"`
+		TransitionID string                 `json:"transitionId"`
+		BindingIndex int                    `json:"bindingIndex,omitempty"`
+		FormData     map[string]interface{} `json:"formData,omitempty"` // Optional user-provided data for manual transitions
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -445,9 +446,9 @@ func (s *Server) FireTransition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fire the transition
+	// Fire the transition; inject form data if provided (manual only or always safe)
 	binding := bindings[request.BindingIndex]
-	if err := s.engine.FireTransition(cpn, transition, binding, marking); err != nil {
+	if err := s.engine.FireTransitionWithData(cpn, transition, binding, marking, request.FormData); err != nil {
 		s.writeError(w, http.StatusInternalServerError, "engine_error", "Failed to fire transition: "+err.Error())
 		return
 	}

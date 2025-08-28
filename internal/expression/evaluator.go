@@ -54,6 +54,15 @@ func (e *Evaluator) Close() {
 	}
 }
 
+// GetGlobalValue returns the current Lua global value for a variable name converted to Go.
+// Returns nil if the variable is not defined.
+func (e *Evaluator) GetGlobalValue(varName string) interface{} {
+	if e.luaState == nil { return nil }
+	lv := e.luaState.GetGlobal(varName)
+	if lv == lua.LNil { return nil }
+	return e.luaValueToGo(lv)
+}
+
 // EvaluateGuard evaluates a guard expression and returns true/false
 func (e *Evaluator) EvaluateGuard(expression string, context *EvaluationContext) (bool, error) {
 	if expression == "" {
@@ -439,6 +448,16 @@ func (ctx *EvaluationContext) SetGlobalClock(clock int) {
 // RegisterColorSet registers a color set in the context
 func (ctx *EvaluationContext) RegisterColorSet(colorSet models.ColorSet) {
 	ctx.ColorSets[colorSet.Name()] = colorSet
+}
+
+// SetValue sets or overrides a variable binding with a raw value (used for external form data)
+func (ctx *EvaluationContext) SetValue(varName string, value interface{}) {
+	// Represent raw value as a token with timestamp = 0 (non-timed semantics). If already a token, keep.
+	if token, ok := value.(*models.Token); ok {
+		ctx.TokenBindings[varName] = token
+		return
+	}
+	ctx.TokenBindings[varName] = models.NewToken(value, 0)
 }
 
 // Clone creates a copy of the evaluation context
