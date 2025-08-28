@@ -68,6 +68,44 @@ type CaseExecutionResponse struct {
 	NewMarking       MarkingResponse `json:"newMarking"`
 }
 
+// ExecuteAll executes automatic transitions until quiescent for a case
+func (h *CaseHandlers) ExecuteAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST method is allowed")
+		return
+	}
+	caseID := r.URL.Query().Get("id")
+	if caseID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing_parameter", "Case ID is required")
+		return
+	}
+	firedCount, err := h.caseManager.ExecuteAll(caseID)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "execution_failed", err.Error())
+		return
+	}
+	case_, err := h.caseManager.GetCase(caseID)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "retrieval_failed", err.Error())
+		return
+	}
+	var markingResponse MarkingResponse
+	if case_.Marking != nil {
+		places := make(map[string][]TokenInfo)
+		for placeName, multiset := range case_.Marking.Places {
+			tokens := multiset.GetAllTokens()
+			tokenInfos := make([]TokenInfo, len(tokens))
+			for i, token := range tokens {
+				tokenInfos[i] = TokenInfo{Value: token.Value, Timestamp: token.Timestamp}
+			}
+			places[placeName] = tokenInfos
+		}
+		markingResponse = MarkingResponse{GlobalClock: case_.Marking.GlobalClock, Places: places}
+	}
+	response := CaseExecutionResponse{TransitionsFired: firedCount, Completed: case_.IsCompleted(), NewMarking: markingResponse}
+	h.writeSuccess(w, response, "")
+}
+
 // Helper functions
 
 func (h *CaseHandlers) caseToResponse(case_ *models.Case) CaseResponse {

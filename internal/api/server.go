@@ -41,6 +41,7 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/cases/resume", s.corsMiddleware(s.caseHandlers.ResumeCase))
 	mux.HandleFunc("/api/cases/abort", s.corsMiddleware(s.caseHandlers.AbortCase))
 	mux.HandleFunc("/api/cases/execute", s.corsMiddleware(s.caseHandlers.ExecuteStep))
+	mux.HandleFunc("/api/cases/executeall", s.corsMiddleware(s.caseHandlers.ExecuteAll))
 	mux.HandleFunc("/api/cases/fire", s.corsMiddleware(s.caseHandlers.FireTransition))
 	mux.HandleFunc("/api/cases/marking", s.corsMiddleware(s.caseHandlers.GetCaseMarking))
 	mux.HandleFunc("/api/cases/transitions", s.corsMiddleware(s.caseHandlers.GetCaseTransitions))
@@ -61,11 +62,11 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/workitems/fail", s.corsMiddleware(s.workItemHandlers.FailWorkItem))
 	mux.HandleFunc("/api/workitems/cancel", s.corsMiddleware(s.workItemHandlers.CancelWorkItem))
 	mux.HandleFunc("/api/workitems/query", s.corsMiddleware(s.workItemHandlers.QueryWorkItems))
-	mux.HandleFunc("/api/workitems/by-case", s.corsMiddleware(s.workItemHandlers.GetWorkItemsByCase))
-	mux.HandleFunc("/api/workitems/by-user", s.corsMiddleware(s.workItemHandlers.GetWorkItemsByUser))
+	mux.HandleFunc("/api/workitems/bycase", s.corsMiddleware(s.workItemHandlers.GetWorkItemsByCase))
+	mux.HandleFunc("/api/workitems/byuser", s.corsMiddleware(s.workItemHandlers.GetWorkItemsByUser))
 	mux.HandleFunc("/api/workitems/overdue", s.corsMiddleware(s.workItemHandlers.GetOverdueWorkItems))
 	mux.HandleFunc("/api/workitems/statistics", s.corsMiddleware(s.workItemHandlers.GetWorkItemStatistics))
-	mux.HandleFunc("/api/workitems/create-for-case", s.corsMiddleware(s.workItemHandlers.CreateWorkItemsForCase))
+	mux.HandleFunc("/api/workitems/createforcase", s.corsMiddleware(s.workItemHandlers.CreateWorkItemsForCase))
 
 	// Health check endpoint
 	mux.HandleFunc("/api/health", s.corsMiddleware(s.HealthCheck))

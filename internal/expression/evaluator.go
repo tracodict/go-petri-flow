@@ -200,7 +200,11 @@ func (e *Evaluator) evaluateLuaExpression(expression string) (interface{}, error
 		if last == "" { // handle trailing semicolon: try previous non-empty
 			for i := len(parts) - 2; i >= 0; i-- {
 				candidate := strings.TrimSpace(parts[i])
-				if candidate != "" { last = candidate; parts = parts[:i]; break }
+				if candidate != "" {
+					last = candidate
+					parts = parts[:i]
+					break
+				}
 			}
 			prefix = strings.Join(parts, ";")
 		}
