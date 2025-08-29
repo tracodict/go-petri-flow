@@ -27,6 +27,9 @@ func (e *Engine) Close() {
 	}
 }
 
+// EvaluatorAccessor returns internal evaluator (read-only) for auxiliary operations (e.g., deferred emissions)
+func (e *Engine) EvaluatorAccessor() *expression.Evaluator { return e.evaluator }
+
 // TokenBinding represents a binding of variables to tokens
 type TokenBinding map[string]*models.Token
 
@@ -120,16 +123,18 @@ func (e *Engine) FireTransition(cpn *models.CPN, transition *models.Transition, 
 		}
 	}
 
-	// Process output arcs (produce tokens)
-	outputArcs := cpn.GetOutputArcs(transition.ID)
-	for _, arc := range outputArcs {
-		count := arc.Multiplicity
-		if count <= 0 {
-			count = 1
-		}
-		for i := 0; i < count; i++ {
-			if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
-				return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+	// Skip immediate output arc processing if this transition is a hierarchical call (deferred by manager)
+	if cpn.GetSubWorkflowByTransition(transition.ID) == nil {
+		outputArcs := cpn.GetOutputArcs(transition.ID)
+		for _, arc := range outputArcs {
+			count := arc.Multiplicity
+			if count <= 0 {
+				count = 1
+			}
+			for i := 0; i < count; i++ {
+				if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
+					return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+				}
 			}
 		}
 	}
@@ -198,15 +203,17 @@ func (e *Engine) FireTransitionWithData(cpn *models.CPN, transition *models.Tran
 		}
 	}
 
-	outputArcs := cpn.GetOutputArcs(transition.ID)
-	for _, arc := range outputArcs {
-		count := arc.Multiplicity
-		if count <= 0 {
-			count = 1
-		}
-		for i := 0; i < count; i++ {
-			if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
-				return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+	if cpn.GetSubWorkflowByTransition(transition.ID) == nil {
+		outputArcs := cpn.GetOutputArcs(transition.ID)
+		for _, arc := range outputArcs {
+			count := arc.Multiplicity
+			if count <= 0 {
+				count = 1
+			}
+			for i := 0; i < count; i++ {
+				if err := e.processOutputArc(cpn, arc, context, marking); err != nil {
+					return fmt.Errorf("failed to process output arc %s (instance %d/%d): %v", arc.ID, i+1, count, err)
+				}
 			}
 		}
 	}
@@ -259,28 +266,32 @@ func (e *Engine) findBindingsRecursive(cpn *models.CPN, arcs []*models.Arc, arcI
 		// Create a new binding with this token
 		newBinding := e.cloneBinding(currentBinding)
 
-		// Evaluate the arc expression to see if this token matches
-		context := e.createEvaluationContext(newBinding, marking)
-		context.BindVariable("token", token) // Bind the current token for evaluation
-
-		result, err := e.evaluator.EvaluateArcExpression(arc.Expression, context)
-		if err != nil {
-			continue // Skip tokens that cause evaluation errors
-		}
-
-		// Check if the result matches the token value
-		if e.tokenMatches(token, result) {
-			// Extract variable bindings from the expression
-			if err := e.extractVariableBindings(arc.Expression, token, newBinding); err != nil {
-				continue // Skip if variable extraction fails
-			}
-
-			// Recursively process remaining arcs
+		// Fast path: simple variable expression (e.g., "x") binds directly without evaluation
+		if isSimpleVariable(arc.Expression) {
+			newBinding[arc.Expression] = token
 			subBindings, err := e.findBindingsRecursive(cpn, arcs, arcIndex+1, newBinding, marking)
 			if err != nil {
-				continue // Skip if recursive binding fails
+				continue
 			}
+			allBindings = append(allBindings, subBindings...)
+			continue
+		}
 
+		// General path: evaluate expression in context
+		context := e.createEvaluationContext(newBinding, marking)
+		context.BindVariable("token", token)
+		result, err := e.evaluator.EvaluateArcExpression(arc.Expression, context)
+		if err != nil {
+			continue
+		}
+		if e.tokenMatches(token, result) {
+			if err := e.extractVariableBindings(arc.Expression, token, newBinding); err != nil {
+				continue
+			}
+			subBindings, err := e.findBindingsRecursive(cpn, arcs, arcIndex+1, newBinding, marking)
+			if err != nil {
+				continue
+			}
 			allBindings = append(allBindings, subBindings...)
 		}
 	}

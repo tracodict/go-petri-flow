@@ -18,17 +18,19 @@ const (
 
 // Case represents a case instance in the CPN
 type Case struct {
-	ID          string                 `json:"id"`
-	CPNID       string                 `json:"cpnId"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Status      CaseStatus             `json:"status"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	StartedAt   *time.Time             `json:"startedAt,omitempty"`
-	CompletedAt *time.Time             `json:"completedAt,omitempty"`
-	Marking     *Marking               `json:"marking"`
-	Variables   map[string]interface{} `json:"variables"` // Case-level variables
-	Metadata    map[string]interface{} `json:"metadata"`  // Additional metadata
+	ID           string                 `json:"id"`
+	CPNID        string                 `json:"cpnId"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	Status       CaseStatus             `json:"status"`
+	CreatedAt    time.Time              `json:"createdAt"`
+	StartedAt    *time.Time             `json:"startedAt,omitempty"`
+	CompletedAt  *time.Time             `json:"completedAt,omitempty"`
+	Marking      *Marking               `json:"marking"`
+	Variables    map[string]interface{} `json:"variables"` // Case-level variables
+	Metadata     map[string]interface{} `json:"metadata"`  // Additional metadata
+	ParentCaseID string                 `json:"parentCaseId,omitempty"`
+	Children     []string               `json:"children,omitempty"`
 }
 
 // NewCase creates a new case instance
@@ -42,6 +44,7 @@ func NewCase(id, cpnID, name, description string) *Case {
 		CreatedAt:   time.Now(),
 		Variables:   make(map[string]interface{}),
 		Metadata:    make(map[string]interface{}),
+		Children:    []string{},
 	}
 }
 
@@ -123,69 +126,73 @@ func (c *Case) GetDuration() time.Duration {
 	if c.StartedAt == nil {
 		return 0
 	}
-	
+
 	endTime := time.Now()
 	if c.CompletedAt != nil {
 		endTime = *c.CompletedAt
 	}
-	
+
 	return endTime.Sub(*c.StartedAt)
 }
 
 // Clone creates a copy of the case
 func (c *Case) Clone() *Case {
 	clone := &Case{
-		ID:          c.ID,
-		CPNID:       c.CPNID,
-		Name:        c.Name,
-		Description: c.Description,
-		Status:      c.Status,
-		CreatedAt:   c.CreatedAt,
-		Variables:   make(map[string]interface{}),
-		Metadata:    make(map[string]interface{}),
+		ID:           c.ID,
+		CPNID:        c.CPNID,
+		Name:         c.Name,
+		Description:  c.Description,
+		Status:       c.Status,
+		CreatedAt:    c.CreatedAt,
+		Variables:    make(map[string]interface{}),
+		Metadata:     make(map[string]interface{}),
+		ParentCaseID: c.ParentCaseID,
+		Children:     make([]string, len(c.Children)),
 	}
-	
+
 	if c.StartedAt != nil {
 		startedAt := *c.StartedAt
 		clone.StartedAt = &startedAt
 	}
-	
+
 	if c.CompletedAt != nil {
 		completedAt := *c.CompletedAt
 		clone.CompletedAt = &completedAt
 	}
-	
+
 	if c.Marking != nil {
 		clone.Marking = c.Marking.Clone()
 	}
-	
+
 	// Copy variables
 	for k, v := range c.Variables {
 		clone.Variables[k] = v
 	}
-	
+
 	// Copy metadata
 	for k, v := range c.Metadata {
 		clone.Metadata[k] = v
 	}
-	
+
+	copy(clone.Children, c.Children)
+
 	return clone
 }
 
 // String returns a string representation of the case
 func (c *Case) String() string {
 	duration := c.GetDuration()
-	return fmt.Sprintf("Case{ID: %s, CPNID: %s, Name: %s, Status: %s, Duration: %v}", 
+	return fmt.Sprintf("Case{ID: %s, CPNID: %s, Name: %s, Status: %s, Duration: %v}",
 		c.ID, c.CPNID, c.Name, c.Status, duration)
 }
 
 // CaseFilter represents filters for case queries
 type CaseFilter struct {
-	CPNID     string     `json:"cpnId,omitempty"`
-	Status    CaseStatus `json:"status,omitempty"`
+	CPNID         string     `json:"cpnId,omitempty"`
+	Status        CaseStatus `json:"status,omitempty"`
 	CreatedAfter  *time.Time `json:"createdAfter,omitempty"`
 	CreatedBefore *time.Time `json:"createdBefore,omitempty"`
-	Name      string     `json:"name,omitempty"`
+	Name          string     `json:"name,omitempty"`
 }
 
 // Matches checks if a case matches the filter criteria
@@ -193,23 +200,23 @@ func (f *CaseFilter) Matches(c *Case) bool {
 	if f.CPNID != "" && c.CPNID != f.CPNID {
 		return false
 	}
-	
+
 	if f.Status != "" && c.Status != f.Status {
 		return false
 	}
-	
+
 	if f.CreatedAfter != nil && c.CreatedAt.Before(*f.CreatedAfter) {
 		return false
 	}
-	
+
 	if f.CreatedBefore != nil && c.CreatedAt.After(*f.CreatedBefore) {
 		return false
 	}
-	
+
 	if f.Name != "" && c.Name != f.Name {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -237,4 +244,3 @@ type CaseQuery struct {
 	Limit  int         `json:"limit,omitempty"`
 	Offset int         `json:"offset,omitempty"`
 }
-

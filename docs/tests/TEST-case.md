@@ -32,7 +32,7 @@ curl -s -X POST ${FLOW_SVC}/api/cpn/load \
 			{"id":"a_mid_in","sourceId":"p_mid","targetId":"t_auto1","expression":"y","direction":"IN"},
 			{"id":"a_out","sourceId":"t_auto1","targetId":"p_out","expression":"y - math.random()","direction":"OUT"}
 		],
-		"initialMarking": {"In": [ {"value": 1 ,"timestamp":0, "count": 10000} ]},
+		"initialMarking": {"In": [ {"value": 1 ,"timestamp":0, "count": 100} ]},
 		"endPlaces": ["Out"]
 	}'
 
@@ -186,3 +186,62 @@ curl -s -X POST "${FLOW_SVC}/api/cases/fire?id=case-1" -H 'Content-Type: applica
 - Aborting transitions marks case terminated; deletion only allowed after termination.
 
 Document version: 1.0
+
+
+### Performance
+
+Primary bottleneck sources (likely): per-token Lua eval (setup + string compile), per-token Go<->Lua value conversion, naive multiset expansion into 10k heap objects, repeated enabled-binding recomputation, and sequential firing (one token per transition pass).
+
+Improve performance (apply top items first):
+
+Compressed multiset
+Keep (value,timestamp,count) aggregates; don’t materialize 10k *models.Token.
+Update marking ops to decrement/increment counts.
+Fire transition: if arc expression is variable passthrough or simple linear map (e.g. x, x+const, x.."suffix"), apply once and transfer count.
+Arc/action precompilation
+On CPN load, precompile each guard/arc/action into a lua.Function (DoString once).
+Evaluation: push already-built function, set only changed globals, call.
+Minimize Lua state setup
+Reuse one L per transition firing; avoid re-running setup for each arc expression.
+Cache lua tables representing immutable token values (numbers/strings skip conversion entirely; write directly as lua.LNumber/lua.LString).
+Fast path for primitive expressions
+Detect patterns: x, x + <number>, x - <number>, x .. "literal".
+Execute in Go without Lua; only fall back to Lua for complex constructs (math.random, function calls, table ops).
+Batch firing
+If transition input arc multiplicity count > 1 and independent (no guard using per-token differences), consume all available identical tokens in one call, produce outputs in bulk (count preserve).
+Offer Engine.FireAllAuto(cpn, marking) that loops internal while auto enabled (you added execute-all; extend inside to batch per transition).
+Binding search pruning
+For large places, short-circuit once enough bindings chosen (only need first for Auto under current semantics).
+Replace full slice copies with index references; avoid cloning tokens during binding enumeration.
+Memory reuse
+Object pool for EvaluationContext and temporary token slices (sync.Pool).
+Avoid map allocations per firing: reuse map[string]*Token (clear entries).
+Reduce conversions
+Provide Evaluator.GetNumber(varName) for numeric tokens to read without converting through generic interface.
+When writing back mutated globals, skip unchanged primitives.
+Optional concurrency
+Parallelize independent auto transitions in a step (careful with shared marking: stage diffs then apply under lock).
+math.random hot path
+If randomness not essential per token, generate once per batch.
+Or switch to pre-filled random slice.
+Guard purity enforcement
+If guard doesn’t reference variable values that differ per token, evaluate once.
+Profiling & metrics
+Add simple timing around FireTransition and Lua eval; use go tool pprof to identify real hot spots before deeper changes.
+Incremental implementation order:
+
+(1) compressed multiset
+(2) precompile expressions
+(4) fast-path simple expressions
+(3) shared context (micro-optimization) Then profile again.
+Data model change sketch (compressed multiset): type MultiToken struct { Value interface{}; Timestamp int; Count int } Marking.Places: map[string][]*MultiToken Consumption: decrement Count; remove when 0. Production: merge with existing identical (value,timestamp) entry.
+
+Arc eval adaptation:
+
+If passthrough: reuse value; just adjust counts.
+If deterministic pure function (no math.random, no globals), compute once.
+Lua precompile sketch: type Compiled struct { fn *lua.LFunction; kind ExprKind; raw string; pure bool; simplePattern SimpleKind } Store in Arc struct / Transition.
+
+Expect speed-up >10x for large homogeneous multisets.
+
+Let me know if you want me to start by implementing compressed multiset or expression precompilation next.

@@ -8,6 +8,7 @@ import (
 
 	case_manager "go-petri-flow/internal/case"
 	"go-petri-flow/internal/engine"
+	"go-petri-flow/internal/expression"
 	"go-petri-flow/internal/models"
 	"go-petri-flow/internal/workitem"
 )
@@ -446,11 +447,78 @@ func (s *Server) FireTransition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fire the transition; inject form data if provided (manual only or always safe)
+	// Fire the transition; handle hierarchical call if subWorkflow link present.
 	binding := bindings[request.BindingIndex]
-	if err := s.engine.FireTransitionWithData(cpn, transition, binding, marking, request.FormData); err != nil {
-		s.writeError(w, http.StatusInternalServerError, "engine_error", "Failed to fire transition: "+err.Error())
-		return
+	if sw := cpn.GetSubWorkflowByTransition(transition.ID); sw != nil {
+		// Step 1: Fire inputs + action only (engine suppresses outputs automatically for hierarchical transitions)
+		if err := s.engine.FireTransitionWithData(cpn, transition, binding, marking, request.FormData); err != nil {
+			s.writeError(w, http.StatusInternalServerError, "engine_error", "Failed to fire hierarchical transition: "+err.Error())
+			return
+		}
+		// Step 2: Execute child net (fresh instance) with autoStart semantics
+		childCPN, ok := s.cpns[sw.CPNID]
+		if !ok {
+			s.writeError(w, http.StatusBadRequest, "child_cpn_missing", fmt.Sprintf("Child CPN %s not loaded", sw.CPNID))
+			return
+		}
+		childMarking := childCPN.CreateInitialMarking()
+		// Apply simple inputMapping: parent binding var -> child variable as temporary variable tokens (not yet token injection into places)
+		// (Improvement pending: inject tokens directly in mapped child input places.)
+		if sw.AutoStart {
+			if _, err := s.engine.FireEnabledTransitions(childCPN, childMarking); err != nil {
+				s.writeError(w, http.StatusInternalServerError, "child_autostart_failed", err.Error())
+				return
+			}
+		}
+		// Step 3: If propagateOnComplete and child completed, map outputs and produce deferred parent outputs now.
+		if sw.PropagateOnComplete && s.engine.IsCompleted(childCPN, childMarking) {
+			parentBinding := engine.TokenBinding{}
+			// Build parentBinding from outputMapping; naive: pick first token from child output places for each mapping
+			for childVar, parentVar := range sw.OutputMapping {
+				var val interface{}
+				// Search for a token value corresponding to childVar heuristic: first token anywhere (since variable scoping not tracked in CPN-level path)
+				for placeID := range childMarking.Places {
+					toks := childMarking.GetTokens(placeID)
+					if len(toks) > 0 {
+						val = toks[0].Value
+						break
+					}
+				}
+				if val != nil {
+					parentBinding[parentVar] = models.NewToken(val, marking.GlobalClock)
+				}
+				_ = childVar
+			}
+			// Produce each output arc expression with built binding
+			for _, arc := range cpn.GetOutputArcs(transition.ID) {
+				if len(parentBinding) == 0 {
+					break
+				}
+				ctx := expression.NewEvaluationContext()
+				ctx.SetGlobalClock(marking.GlobalClock)
+				for varName, tk := range parentBinding {
+					ctx.BindVariable(varName, tk)
+				}
+				result, err := s.engine.EvaluatorAccessor().EvaluateArcExpression(arc.Expression, ctx)
+				if err != nil {
+					continue
+				}
+				place := cpn.GetPlace(arc.GetPlaceID())
+				if place == nil {
+					continue
+				}
+				newToken := models.NewToken(result, marking.GlobalClock)
+				if err := place.ValidateToken(newToken); err != nil {
+					continue
+				}
+				marking.AddToken(place.ID, newToken)
+			}
+		}
+	} else {
+		if err := s.engine.FireTransitionWithData(cpn, transition, binding, marking, request.FormData); err != nil {
+			s.writeError(w, http.StatusInternalServerError, "engine_error", "Failed to fire transition: "+err.Error())
+			return
+		}
 	}
 
 	s.writeSuccess(w, s.markingToResponse(marking), "Transition "+transition.Name+" fired successfully")

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go-petri-flow/internal/engine"
+	"go-petri-flow/internal/expression"
 	"go-petri-flow/internal/models"
 )
 
@@ -231,6 +232,10 @@ func (m *Manager) ExecuteStep(caseID string) (int, error) {
 	// Check if case is completed
 	if m.engine.IsCompleted(cpn, case_.Marking) {
 		case_.Complete()
+		// If this is a child case, propagate to parent
+		if case_.ParentCaseID != "" {
+			m.propagateChildCompletion(case_)
+		}
 	}
 
 	return firedCount, nil
@@ -301,19 +306,237 @@ func (m *Manager) FireTransition(caseID, transitionID string, bindingIndex int) 
 		return fmt.Errorf("binding index %d out of range", bindingIndex)
 	}
 
-	// Fire the transition
+	// Determine if this is a hierarchical call transition
+	sw := cpn.GetSubWorkflowByTransition(transitionID)
 	binding := bindings[bindingIndex]
-	if err := m.engine.FireTransition(cpn, transition, binding, case_.Marking); err != nil {
-		return fmt.Errorf("failed to fire transition: %v", err)
+	if sw != nil {
+		if err := m.fireSubWorkflowTransition(case_, cpn, transition, sw, binding); err != nil {
+			return err
+		}
+	} else {
+		// Fire normally
+		if err := m.engine.FireTransition(cpn, transition, binding, case_.Marking); err != nil {
+			return fmt.Errorf("failed to fire transition: %v", err)
+		}
 	}
 
 	// Check if case is completed
 	if m.engine.IsCompleted(cpn, case_.Marking) {
 		case_.Complete()
+		if case_.ParentCaseID != "" {
+			m.propagateChildCompletion(case_)
+		}
 	}
 
 	return nil
 }
+
+// fireSubWorkflowTransition handles hierarchical call semantics
+func (m *Manager) fireSubWorkflowTransition(parentCase *models.Case, parentCPN *models.CPN, transition *models.Transition, sw *models.SubWorkflowLink, binding engine.TokenBinding) error {
+	// Consume parent inputs & execute action.
+	// Only suppress (defer) output arcs if PropagateOnComplete is true; otherwise allow normal firing.
+
+	originalOutputs := parentCPN.GetOutputArcs(transition.ID)
+	suppressed := false
+	if sw.PropagateOnComplete {
+		suppressed = true
+		// Temporarily remove output arcs so engine skips producing them now.
+		var remaining []*models.Arc
+		for _, arc := range parentCPN.Arcs {
+			skip := false
+			if arc.IsOutputArc() && arc.GetTransitionID() == transition.ID {
+				skip = true
+			}
+			if !skip {
+				remaining = append(remaining, arc)
+			}
+		}
+		parentCPN.Arcs = remaining
+	}
+
+	// Fire transition (inputs + action (+ outputs if not suppressed))
+	if err := m.engine.FireTransition(parentCPN, transition, binding, parentCase.Marking); err != nil {
+		if suppressed { // restore arcs on error
+			parentCPN.Arcs = append(parentCPN.Arcs, originalOutputs...)
+		}
+		return fmt.Errorf("failed to fire hierarchical transition (inputs/action): %v", err)
+	}
+	if suppressed {
+		// Restore arcs immediately so future enablement checks see them.
+		parentCPN.Arcs = append(parentCPN.Arcs, originalOutputs...)
+	}
+
+	// Step 2: Spawn child case
+	childSeq := len(parentCase.Children) + 1
+	childCaseID := fmt.Sprintf("%s:%s:%d", parentCase.ID, sw.ID, childSeq)
+	// Create case
+	childCase := models.NewCase(childCaseID, sw.CPNID, fmt.Sprintf("Child %s of %s", sw.CPNID, parentCase.ID), "")
+	childCase.ParentCaseID = parentCase.ID
+	// Register in manager
+	m.cases[childCaseID] = childCase
+	parentCase.Children = append(parentCase.Children, childCaseID)
+
+	childCPN, exists := m.cpns[sw.CPNID]
+	if !exists {
+		return fmt.Errorf("child CPN %s not loaded", sw.CPNID)
+	}
+	// Create child initial marking (clone of defined initial marking)
+	childMarking := childCPN.CreateInitialMarking()
+	// Apply input mapping: parent variable -> child variable by creating bound variable tokens
+	// For now we interpret variables as binding variable names; we need the token values from binding
+	for parentVar, childVar := range sw.InputMapping {
+		if tk, ok := binding[parentVar]; ok && tk != nil {
+			// Store as child case variable for later arc expressions; also create a pseudo token variable? We'll set case variable.
+			childCase.SetVariable(childVar, tk.Value)
+		}
+	}
+	childCase.Start(childMarking)
+
+	// Auto-start execution if configured
+	if sw.AutoStart {
+		// Fire automatic transitions to quiescence
+		if _, err := m.engine.FireEnabledTransitions(childCPN, childCase.Marking); err != nil {
+			return fmt.Errorf("failed autoStart child case %s: %v", childCaseID, err)
+		}
+		if m.engine.IsCompleted(childCPN, childCase.Marking) {
+			childCase.Complete()
+		}
+	}
+
+	// If outputs were suppressed we record them for deferred emission
+	if suppressed {
+		defListKey := "_deferredOutputs"
+		var list []map[string]string
+		if v, ok := parentCase.Metadata[defListKey]; ok {
+			if existing, ok2 := v.([]map[string]string); ok2 {
+				list = existing
+			}
+		}
+		for _, arc := range originalOutputs {
+			if !arc.IsOutputArc() {
+				continue
+			}
+			list = append(list, map[string]string{"transitionId": transition.ID, "arcId": arc.ID, "childCaseId": childCaseID})
+		}
+		parentCase.Metadata[defListKey] = list
+	}
+
+	// If child finished during autoStart and we suppressed outputs, propagate immediately
+	if suppressed && childCase.IsCompleted() {
+		m.propagateChildCompletion(childCase)
+	}
+
+	return nil
+}
+
+// propagateChildCompletion emits deferred outputs for a completed child case
+func (m *Manager) propagateChildCompletion(child *models.Case) {
+	parentCase, ok := m.cases[child.ParentCaseID]
+	if !ok {
+		return
+	}
+	parentCPN := m.cpns[parentCase.CPNID]
+	defListKey := "_deferredOutputs"
+	raw, ok := parentCase.Metadata[defListKey]
+	if !ok {
+		return
+	}
+	list, ok := raw.([]map[string]string)
+	if !ok {
+		return
+	}
+	// Rebuild new list excluding processed entries
+	var remaining []map[string]string
+	for _, entry := range list {
+		if entry["childCaseId"] != child.ID { // keep entries for other children
+			remaining = append(remaining, entry)
+			continue
+		}
+		tID := entry["transitionId"]
+		arcID := entry["arcId"]
+		transition := parentCPN.GetTransition(tID)
+		if transition == nil {
+			continue
+		}
+		arc := parentCPN.GetArc(arcID)
+		if arc == nil {
+			continue
+		}
+		// Build binding from output mapping
+		sw := parentCPN.GetSubWorkflowByTransition(tID)
+		if sw == nil {
+			continue
+		}
+		// Only propagate if this link requested deferral / propagation on completion
+		if !sw.PropagateOnComplete {
+			continue
+		}
+		b := engine.TokenBinding{}
+		// Extract child values
+		for childVar, parentVar := range sw.OutputMapping {
+			var val interface{}
+			if v, ok := child.Variables[childVar]; ok {
+				val = v
+			} else if child.Marking != nil {
+				// Scan all places for first token value
+				for placeID := range child.Marking.Places {
+					toks := child.Marking.GetTokens(placeID)
+					if len(toks) > 0 {
+						val = toks[0].Value
+						break
+					}
+				}
+			}
+			if val == nil {
+				continue
+			}
+			b[parentVar] = models.NewToken(val, parentCase.Marking.GlobalClock)
+		}
+		// Produce all output arcs of the transition (not just one arc) to honor original semantics
+		outArcs := parentCPN.GetOutputArcs(tID)
+		_ = outArcs
+		// For simplicity, only produce for arcs matching arcID (deferred entry) now
+		if bindingTokenCount := len(b); bindingTokenCount > 0 {
+			// Use engine to produce tokens on this arc expression for each variable binding
+			// Reuse a mini context by firing artificial output production
+			// Implement quick re-eval similar to engine.processOutputArc
+			// We'll call a helper function produceSingleArc
+			m.produceSingleArc(parentCPN, arc, b, parentCase.Marking)
+		}
+	}
+	if len(remaining) == 0 {
+		delete(parentCase.Metadata, defListKey)
+	} else {
+		parentCase.Metadata[defListKey] = remaining
+	}
+}
+
+// produceSingleArc replicates engine output arc logic (simplified) for deferred emission
+func (m *Manager) produceSingleArc(cpn *models.CPN, arc *models.Arc, binding engine.TokenBinding, marking *models.Marking) {
+	// Reuse engine's evaluator indirectly: create a fresh evaluation context
+	ctx := expression.NewEvaluationContext()
+	ctx.SetGlobalClock(marking.GlobalClock)
+	for varName, token := range binding {
+		ctx.BindVariable(varName, token)
+	}
+	// Evaluate expression
+	result, err := m.engineEvaluator().EvaluateArcExpression(arc.Expression, ctx)
+	if err != nil {
+		return
+	}
+	place := cpn.GetPlace(arc.GetPlaceID())
+	if place == nil {
+		return
+	}
+	newToken := models.NewToken(result, marking.GlobalClock)
+	if err := place.ValidateToken(newToken); err != nil {
+		return
+	}
+	marking.AddToken(place.ID, newToken)
+}
+
+// engineEvaluator exposes underlying evaluator (package-private compromise)
+func (m *Manager) engineEvaluator() *expression.Evaluator { return m.engine.EvaluatorAccessor() }
 
 // GetEnabledTransitions returns enabled transitions for a case
 func (m *Manager) GetEnabledTransitions(caseID string) ([]*models.Transition, map[string][]engine.TokenBinding, error) {

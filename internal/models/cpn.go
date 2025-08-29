@@ -13,8 +13,9 @@ type CPN struct {
 	Places         []*Place            `json:"places"`
 	Transitions    []*Transition       `json:"transitions"`
 	Arcs           []*Arc              `json:"arcs"`
-	InitialMarking map[string][]*Token `json:"initialMarking"` // Initial tokens by place ID
-	EndPlaces      []string            `json:"endPlaces"`      // Places that signify case completion (still by name for UX)
+	InitialMarking map[string][]*Token `json:"initialMarking"`         // Initial tokens by place ID
+	EndPlaces      []string            `json:"endPlaces"`              // Places that signify case completion (still by name for UX)
+	SubWorkflows   []*SubWorkflowLink  `json:"subWorkflows,omitempty"` // Hierarchical substitution transitions
 }
 
 // NewCPN creates a new CPN with the given ID, name, and description
@@ -28,6 +29,7 @@ func NewCPN(id, name, description string) *CPN {
 		Arcs:           []*Arc{},
 		InitialMarking: make(map[string][]*Token),
 		EndPlaces:      []string{},
+		SubWorkflows:   []*SubWorkflowLink{},
 	}
 }
 
@@ -58,6 +60,7 @@ func (cpn *CPN) AddInitialToken(placeID string, token *Token) {
 
 // SetEndPlaces sets the end places for the CPN
 func (cpn *CPN) SetEndPlaces(endPlaces []string) {
+	// Store as provided (names or IDs) for backward compatibility.
 	cpn.EndPlaces = endPlaces
 }
 
@@ -215,10 +218,10 @@ func (cpn *CPN) ValidateStructure() []error {
 		}
 	}
 
-	// Check if end places reference valid places
-	for _, endPlace := range cpn.EndPlaces {
-		if cpn.GetPlaceByName(endPlace) == nil {
-			errors = append(errors, fmt.Errorf("end place references non-existent place name: %s", endPlace))
+	// Check if end places reference valid places by ID or name (backward compatibility)
+	for _, end := range cpn.EndPlaces {
+		if cpn.GetPlace(end) == nil && cpn.GetPlaceByName(end) == nil {
+			errors = append(errors, fmt.Errorf("end place references non-existent place (id or name): %s", end))
 		}
 	}
 
@@ -231,9 +234,12 @@ func (cpn *CPN) IsCompleted(marking *Marking) bool {
 		return false
 	}
 
-	// Check if all end places have tokens
-	for _, endPlace := range cpn.EndPlaces {
-		pl := cpn.GetPlaceByName(endPlace)
+	// Check if all end places have tokens (support id or name entries)
+	for _, endIDOrName := range cpn.EndPlaces {
+		pl := cpn.GetPlace(endIDOrName)
+		if pl == nil { // try by name
+			pl = cpn.GetPlaceByName(endIDOrName)
+		}
 		if pl == nil || !marking.HasTokens(pl.ID) {
 			return false
 		}
@@ -269,6 +275,7 @@ func (cpn *CPN) Clone() *CPN {
 		Arcs:           make([]*Arc, len(cpn.Arcs)),
 		InitialMarking: make(map[string][]*Token),
 		EndPlaces:      make([]string, len(cpn.EndPlaces)),
+		SubWorkflows:   make([]*SubWorkflowLink, len(cpn.SubWorkflows)),
 	}
 
 	// Clone places
@@ -298,5 +305,22 @@ func (cpn *CPN) Clone() *CPN {
 	// Clone end places
 	copy(clone.EndPlaces, cpn.EndPlaces)
 
+	// Clone sub workflows
+	for i, sw := range cpn.SubWorkflows {
+		if sw != nil {
+			clone.SubWorkflows[i] = sw.Clone()
+		}
+	}
+
 	return clone
+}
+
+// GetSubWorkflowByTransition returns the sub workflow link for a given call transition id
+func (cpn *CPN) GetSubWorkflowByTransition(transitionID string) *SubWorkflowLink {
+	for _, sw := range cpn.SubWorkflows {
+		if sw.CallTransitionID == transitionID {
+			return sw
+		}
+	}
+	return nil
 }

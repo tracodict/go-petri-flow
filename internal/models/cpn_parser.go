@@ -32,6 +32,7 @@ type CPNDefinitionJSON struct {
 	Arcs           []ArcJSON              `json:"arcs"`
 	InitialMarking map[string][]TokenJSON `json:"initialMarking,omitempty"` // Keys: place IDs (preferred) or legacy place names
 	EndPlaces      []string               `json:"endPlaces,omitempty"`
+	SubWorkflows   []SubWorkflowJSON      `json:"subWorkflows,omitempty"`
 }
 
 // JsonSchemaDef represents a named JSON Schema definition
@@ -103,6 +104,17 @@ type ArcJSON struct {
 	Multiplicity int    `json:"multiplicity,omitempty"`
 }
 
+// SubWorkflowJSON represents JSON structure for a hierarchical link
+type SubWorkflowJSON struct {
+	ID                  string            `json:"id"`
+	CPNID               string            `json:"cpnId"`
+	CallTransitionID    string            `json:"callTransitionId"`
+	AutoStart           bool              `json:"autoStart"`
+	PropagateOnComplete bool              `json:"propagateOnComplete"`
+	InputMapping        map[string]string `json:"inputMapping,omitempty"`
+	OutputMapping       map[string]string `json:"outputMapping,omitempty"`
+}
+
 // TokenJSON represents the JSON structure for tokens
 type TokenJSON struct {
 	Value     interface{} `json:"value"`
@@ -155,8 +167,15 @@ func (p *CPNParser) ParseCPNFromDefinition(cpnDef *CPNDefinitionJSON) (*CPN, err
 		return nil, fmt.Errorf("failed to parse initial marking: %v", err)
 	}
 
-	// Set end places
-	cpn.SetEndPlaces(cpnDef.EndPlaces)
+	// Set end places (preserve as provided for backward compatibility; IsCompleted handles name or ID)
+	if len(cpnDef.EndPlaces) > 0 {
+		cpn.SetEndPlaces(cpnDef.EndPlaces)
+	}
+
+	// Parse sub workflows
+	if err := p.parseSubWorkflows(cpn, cpnDef.SubWorkflows); err != nil {
+		return nil, fmt.Errorf("failed to parse subWorkflows: %v", err)
+	}
 
 	// Validate the CPN structure
 	if errors := cpn.ValidateStructure(); len(errors) > 0 {
@@ -325,6 +344,7 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 		Arcs:           make([]ArcJSON, len(cpn.Arcs)),
 		InitialMarking: make(map[string][]TokenJSON),
 		EndPlaces:      cpn.EndPlaces,
+		SubWorkflows:   make([]SubWorkflowJSON, len(cpn.SubWorkflows)),
 	}
 
 	// Use preserved original definitions if available
@@ -379,10 +399,47 @@ func (p *CPNParser) CPNToJSON(cpn *CPN) ([]byte, error) {
 		cpnDef.InitialMarking[placeID] = tokenDefs
 	}
 
+	// Convert sub workflows
+	for i, sw := range cpn.SubWorkflows {
+		if sw == nil {
+			continue
+		}
+		cpnDef.SubWorkflows[i] = SubWorkflowJSON{
+			ID:                  sw.ID,
+			CPNID:               sw.CPNID,
+			CallTransitionID:    sw.CallTransitionID,
+			AutoStart:           sw.AutoStart,
+			PropagateOnComplete: sw.PropagateOnComplete,
+			InputMapping:        sw.InputMapping,
+			OutputMapping:       sw.OutputMapping,
+		}
+	}
+
 	return json.MarshalIndent(cpnDef, "", "  ")
 }
 
 // GetColorSetParser returns the color set parser
 func (p *CPNParser) GetColorSetParser() *ColorSetParser {
 	return p.colorSetParser
+}
+
+// parseSubWorkflows loads sub workflow links
+func (p *CPNParser) parseSubWorkflows(cpn *CPN, defs []SubWorkflowJSON) error {
+	for _, d := range defs {
+		// Validate transition exists
+		if cpn.GetTransition(d.CallTransitionID) == nil {
+			return fmt.Errorf("subWorkflow %s references unknown transition %s", d.ID, d.CallTransitionID)
+		}
+		sw := &SubWorkflowLink{
+			ID:                  d.ID,
+			CPNID:               d.CPNID,
+			CallTransitionID:    d.CallTransitionID,
+			AutoStart:           d.AutoStart,
+			PropagateOnComplete: d.PropagateOnComplete,
+			InputMapping:        d.InputMapping,
+			OutputMapping:       d.OutputMapping,
+		}
+		cpn.SubWorkflows = append(cpn.SubWorkflows, sw)
+	}
+	return nil
 }
