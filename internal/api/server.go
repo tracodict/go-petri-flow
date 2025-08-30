@@ -45,6 +45,7 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/cases/fire", s.corsMiddleware(s.caseHandlers.FireTransition))
 	mux.HandleFunc("/api/cases/marking", s.corsMiddleware(s.caseHandlers.GetCaseMarking))
 	mux.HandleFunc("/api/cases/transitions", s.corsMiddleware(s.caseHandlers.GetCaseTransitions))
+	mux.HandleFunc("/api/cases/transitions/enabled", s.corsMiddleware(s.caseHandlers.GetCaseEnabledTransitions))
 	mux.HandleFunc("/api/cases/query", s.corsMiddleware(s.caseHandlers.QueryCases))
 	mux.HandleFunc("/api/cases/statistics", s.corsMiddleware(s.caseHandlers.GetCaseStatistics))
 

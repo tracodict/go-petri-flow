@@ -568,6 +568,68 @@ func (h *CaseHandlers) GetCaseTransitions(w http.ResponseWriter, r *http.Request
 	h.writeSuccess(w, transitions, "")
 }
 
+// GetCaseEnabledTransitions returns only enabled transitions with explicit binding candidates for a case.
+func (h *CaseHandlers) GetCaseEnabledTransitions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET method is allowed")
+		return
+	}
+	caseID := r.URL.Query().Get("id")
+	if caseID == "" {
+		h.writeError(w, http.StatusBadRequest, "missing_parameter", "Case ID is required")
+		return
+	}
+	case_, err := h.caseManager.GetCase(caseID)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "case_not_found", err.Error())
+		return
+	}
+	if case_.Marking == nil {
+		h.writeError(w, http.StatusBadRequest, "no_marking", "Case has no marking (not started)")
+		return
+	}
+	// Use engine through case manager
+	transitions, bindingsMap, err := h.caseManager.GetEnabledTransitions(caseID)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "get_enabled_failed", err.Error())
+		return
+	}
+	type EnabledCaseTransition struct {
+		ID               string                   `json:"id"`
+		Name             string                   `json:"name"`
+		Kind             string                   `json:"kind"`
+		GuardExpression  string                   `json:"guardExpression,omitempty"`
+		ActionExpression string                   `json:"actionExpression,omitempty"`
+		FormSchema       string                   `json:"formSchema,omitempty"`
+		LayoutSchema     string                   `json:"layoutSchema,omitempty"`
+		Bindings         []map[string]interface{} `json:"bindings"`
+	}
+	var result []EnabledCaseTransition
+	for _, t := range transitions {
+		bList := bindingsMap[t.ID]
+		ect := EnabledCaseTransition{
+			ID:               t.ID,
+			Name:             t.Name,
+			Kind:             string(t.Kind),
+			GuardExpression:  t.GuardExpression,
+			ActionExpression: t.ActionExpression,
+			FormSchema:       t.FormSchema,
+			LayoutSchema:     t.LayoutSchema,
+		}
+		for _, bind := range bList {
+			row := make(map[string]interface{})
+			for varName, token := range bind {
+				if token != nil {
+					row[varName] = token.Value
+				}
+			}
+			ect.Bindings = append(ect.Bindings, row)
+		}
+		result = append(result, ect)
+	}
+	h.writeSuccess(w, result, "")
+}
+
 // QueryCases queries cases based on filter criteria
 func (h *CaseHandlers) QueryCases(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
